@@ -1,29 +1,47 @@
-from dolfin import Function, FunctionSpace
+from dolfin import Function, FunctionSpace, VectorElement, TensorElement
+from itertools import imap, izip
 import numpy as np
 import ufl
 
 
+# Expression which when evaluated end up in the same space as the arguments
+SAME_SPACE_RULES = {ufl.algebra.Sum: np.add,
+                    ufl.algebra.Abs: np.abs,
+                    ufl.algebra.Division: np.divide,
+                    ufl.algebra.Product: np.multiply,
+                    ufl.algebra.Power: np.power,
+                    ufl.mathfunctions.Sin: np.sin,
+                    ufl.mathfunctions.Cos: np.cos,
+                    ufl.mathfunctions.Sqrt: np.sqrt,
+                    ufl.mathfunctions.Exp: np.exp, 
+                    ufl.mathfunctions.Ln: np.log,
+                    ufl.mathfunctions.Tan: np.tan,
+                    ufl.mathfunctions.Sinh: np.sinh,
+                    ufl.mathfunctions.Cosh: np.cosh,
+                    ufl.mathfunctions.Tanh: np.tanh,
+                    ufl.mathfunctions.Asin: np.arcsin,
+                    ufl.mathfunctions.Acos: np.arccos,
+                    ufl.mathfunctions.Atan: np.arctan,
+                    ufl.mathfunctions.Atan2: np.arctan2}
 
-UFL_2_NUMPY = {ufl.algebra.Sum: np.add,
-               ufl.algebra.Abs: np.abs,
-               ufl.algebra.Division: np.divide,
-               ufl.algebra.Product: np.multiply,
-               ufl.algebra.Power: np.power,
-               ufl.mathfunctions.Sin: np.sin,
-               ufl.mathfunctions.Cos: np.cos,
-               ufl.mathfunctions.Sqrt: np.sqrt,
-               ufl.mathfunctions.Exp: np.exp, 
-               ufl.mathfunctions.Ln: np.log,
-               ufl.mathfunctions.Tan: np.tan,
-               ufl.mathfunctions.Sinh: np.sinh,
-               ufl.mathfunctions.Cosh: np.cosh,
-               ufl.mathfunctions.Tanh: np.tanh,
-               ufl.mathfunctions.Asin: np.arcsin,
-               ufl.mathfunctions.Acos: np.arccos,
-               ufl.mathfunctions.Atan: np.arctan,
-               ufl.mathfunctions.Atan2: np.arctan2}
 
-def Eval(expr, numpy_rules=UFL_2_NUMPY):
+# Expression which when evaluated end up in general in different space than 
+# the arguments/require manipulations before numpy is applied
+DIFFERENT_SPACE_RULES = {ufl.tensoralgebra.Inverse: np.linalg.inv,
+                         ufl.tensoralgebra.Transposed: np.transpose,
+                         ufl.tensoralgebra.Sym: lambda A: 0.5*(A + A.T),
+                         ufl.tensoralgebra.Skew: lambda A: 0.5*(A - A.T),
+                         ufl.tensoralgebra.Deviatoric: lambda A: A - np.trace(A)*np.eye(len(A))*(1./len(A)),
+                         ufl.tensoralgebra.Cofactor: lambda A: np.linalg.det(A)*(np.linalg.inv(A)).T,
+                         ufl.tensoralgebra.Determinant: np.linalg.det,
+                         ufl.tensoralgebra.Trace: np.trace,
+                         ufl.tensoralgebra.Dot: np.dot,
+                         ufl.tensoralgebra.Cross: np.cross,
+                         ufl.tensoralgebra.Outer: np.outer,
+                         ufl.tensoralgebra.Inner: np.inner}
+
+
+def Eval(expr, ss_rules=SAME_SPACE_RULES, ds_rules=DIFFERENT_SPACE_RULES):
     '''
     This intepreter translates expr into a function object or a number. Expr is 
     defined via a subset of UFL language. Letting f, g be functions in V 
@@ -35,34 +53,18 @@ def Eval(expr, numpy_rules=UFL_2_NUMPY):
 
     if isinstance(expr, (ufl.algebra.ScalarValue, ufl.algebra.IntValue)):
         return expr.value()
-
-    # Inv, Transpose, Sym, Skew, Dev, Cross maps matrices to matrices
-    if isinstance(expr, (ufl.tensoralgebra.Inverse,
-                         ufl.tensoralgebra.Transposed,
-                         ufl.tensoralgebra.Sym,
-                         ufl.tensoralgebra.Skew,
-                         ufl.tensoralgebra.Deviatoric,
-                         ufl.tensoralgebra.Cofactor)):
-        return mat_to_mat(expr)
-
-    # Tr and Det nodes map matrix to scalar. We enable this only if the 
-    # space if V x V ....
-    if isinstance(expr, (ufl.tensoralgebra.Determinant, ufl.tensoralgebra.Trace)):
-        return mat_to_scalar(expr)
-
-    # Cross, Dot, Outer map tensors to tensor/scalar
-    if isinstance(expr, (ufl.tensoralgebra.Dot,
-                         ufl.tensoralgebra.Cross,
-                         ufl.tensoralgebra.Outer,
-                         ufl.tensoralgebra.Inner)):
-        return tensor_to_tensor(expr)
+        
+    expr_type = type(expr)
+    if expr_type in ds_rules:
+        return numpy_reshaped(expr, op=ds_rules[expr_type])
 
     # NOTE: for now we assume that all the expression arguments are either 
     # numbers or functions in the same function space. We can get the coefficients
-    # by straight forward manipulations of the coefficient arrays
+    # by straight forward manipulations of the coefficient arrays. The reshaping 
+    # rules would be identity
     args = map(Eval, expr.ufl_operands)
-    # Things from here on must be possible via numpy
-    op = numpy_rules[type(expr)]
+
+    op = ss_rules[expr_type]
     # Manipulate coefs of arguments to get coefs of the expression
     coefs = map(coefs_of, args)
     V_coefs = op(*coefs)    
@@ -107,86 +109,97 @@ def space_of(foos):
     return FunctionSpace(mesh, elm)
 
 
-def mat_to_mat(expr):
-    '''Single argument nodes that represent transformation of matrix to matrix'''
-    A = Eval(expr.ufl_operands[0]) 
-    V = A.function_space()
-    coefs = coefs_of(A)
-    # New values are obtained by mapping op numpy over the right values
-    shape = A.ufl_shape
-    n, m = shape
-    indices = np.column_stack([V.sub(comp).dofmap().dofs()
-                               for comp in range(V.num_sub_spaces())])
-    # NOTE: doing this by Eval(0.5*(A-tr(A))) would require handling 
-    # fewer ops here but we'd need ConstantFunction
-    ops = {ufl.tensoralgebra.Inverse: np.linalg.inv,
-           ufl.tensoralgebra.Transposed: np.transpose,
-           ufl.tensoralgebra.Sym: lambda A: 0.5*(A + A.T),
-           ufl.tensoralgebra.Skew: lambda A: 0.5*(A - A.T),
-           ufl.tensoralgebra.Deviatoric: lambda A, n=n: A - np.trace(A)*np.eye(n)*(1./n),
-           ufl.tensoralgebra.Cofactor: lambda A, n=n: np.linalg.det(A)*(np.linalg.inv(A)).T}
-    op = ops[type(expr)]
-
-    for row in indices:
-        coefs[row] = op(coefs[row].reshape(shape)).flatten()
-    return make_function(V, coefs)
-
-
-def mat_to_scalar(expr):
-    '''Single argument nodes that represent transformation of matrix to scalar'''
-    A = Eval(expr.ufl_operands[0]) 
-    V = A.function_space()
-    # Is this a V x V x ... x V space
-    sub_elm,  = set(V.ufl_element().sub_elements())
-    # If so proceed to compute the values
-
-    values = coefs_of(A)
-    # New values are obtained by mapping op numpy over the right values
-    shape = A.ufl_shape
-    n, m = shape
-    indices = np.column_stack([V.sub(comp).dofmap().dofs()
-                               for comp in range(V.num_sub_spaces())])
-
-    op = {ufl.tensoralgebra.Determinant: np.linalg.det,
-          ufl.tensoralgebra.Trace: np.trace}[type(expr)]
+def numpy_reshaped(expr, op):
+    '''Get the coefs by applying the numpy op to reshaped argument coefficients'''
+    args = map(Eval, expr.ufl_operands)
+    # Do we have V x V x ... spaces?
+    sub_elm = common_sub_element([space_of((arg, )) for arg in args])
     
-    # Getting values of the scalar function
-    coefs = np.fromiter((op(values[row].reshape(shape)) for row in indices), dtype=float)
-    V = FunctionSpace(V.mesh(), sub_elm)
-    
-    return make_function(V, coefs)
+    get_args = []
+    # Construct iterators for accesing the coef values of arguments in the 
+    # right way be used with numpy op
+    for arg in args:
+        arg_coefs = coefs_of(arg)
+
+        V = arg.function_space()
+        shape = arg.ufl_shape
+
+        # How to access coefficients by indices 
+        indices = numpy_op_indices(V, shape)
+
+        # Get values for op by reshaping
+        if shape:
+            reshape = lambda x, s=shape: x.reshape(s)
+            get = (reshape(arg_coefs[index]) for index in indices)
+        else:
+            get = (arg_coefs[index] for index in indices)
+
+        get_args.append(get)
+    # Now all the arguments can be iterated to gether by
+    args = izip(*get_args)
+
+    # Construct the result space
+    shape_res = expr.ufl_shape
+    V_res = make_space(sub_elm, shape_res, V.mesh())
+    # How to reshape the result and assign
+    if shape_res:
+        dofs = imap(list, numpy_op_indices(V_res, shape_res))
+        flat = lambda x: x.flatten()
+    else:
+        dofs = numpy_op_indices(V_res, shape_res)
+        flat = lambda x: x
+        
+    # Fill coefs of the result expression
+    coefs_res = Function(V_res).vector().get_local()
+    for dof, dof_args in izip(dofs, args):
+        coefs_res[dof] = flat(op(*dof_args))
+
+    return make_function(V_res, coefs_res)
 
 
-def tensor_to_tensor(expr):
-    '''Two argument nodes that represent transformation between tensors'''
-    A, B = map(Eval, expr.ufl_operands)
-    # Do we have V x V spaces?
-    subA = 
-    subB =
+def numpy_op_indices(V, shape):
+    '''Iterator over dofs of V in a logical way'''
+    # next(numpy_of_indices(V)) get indices for accesing coef of function in V
+    # in a way that after reshaping the values can be used by numpy
+    nsubs = V.num_sub_spaces()
+    # Get will give us e.g matrix to go with det to set the value of det
+    if nsubs:
+        assert len(shape)
+        indices = imap(list, izip(*[iter(V.sub(comp).dofmap().dofs()) for comp in range(nsubs)]))
+    else:
+        assert not len(shape)
+        indices = iter(V.dofmap().dofs())
+
+    return indices
 
 
-    V = A.function_space()
-    coefs = coefs_of(A)
-    # New values are obtained by mapping op numpy over the right values
-    shape = A.ufl_shape
-    n, m = shape
-    indices = np.column_stack([V.sub(comp).dofmap().dofs()
-                               for comp in range(V.num_sub_spaces())])
+def common_sub_element(spaces):
+    '''V for space which are tensor products of V otherwise fail'''
+    V = None
+    for space in spaces:
+        if not space.num_sub_spaces():
+            V_ = space.ufl_element()
+        else:
+            V_, = set(space.ufl_element().sub_elements())
+        
+        assert V is None or V == V_
+
+        V = V_
+    return V
 
 
-    # NOTE: doing this by Eval(0.5*(A-tr(A))) would require handling 
-    # fewer ops here but we'd need ConstantFunction
-    ops = {ufl.tensoralgebra.Inverse: np.linalg.inv,
-           ufl.tensoralgebra.Transposed: np.transpose,
-           ufl.tensoralgebra.Sym: lambda A: 0.5*(A + A.T),
-           ufl.tensoralgebra.Skew: lambda A: 0.5*(A - A.T),
-           ufl.tensoralgebra.Deviatoric: lambda A, n=n: A - np.trace(A)*np.eye(n)*(1./n),
-           ufl.tensoralgebra.Cofactor: lambda A, n=n: np.linalg.det(A)*(np.linalg.inv(A)).T}
-    op = ops[type(expr)]
+def make_space(V, shape, mesh):
+    '''Tensor product space of right shape'''
+    if not shape:
+        elm = V
+    elif len(shape) == 1:
+        elm = VectorElement(V, len(shape))
+    elif len(shape) == 2:
+        elm = TensorElement(V, shape)
+    else:
+        raise ValueError('No spaces for tensor of rank 3 and higher')
 
-    for row in indices:
-        coefs[row] = op(coefs[row].reshape(shape)).flatten()
-    return make_function(V, coefs)
+    return FunctionSpace(mesh, elm)
 
 
 # ------------------------------------------------------------------------------
@@ -235,3 +248,5 @@ if __name__ == '__main__':
     true = interpolate(Constant(3), V)
     print assemble(inner(me-true, me-true)*dx(domain=mesh))
     
+    # FIXME:
+    # Indexed
