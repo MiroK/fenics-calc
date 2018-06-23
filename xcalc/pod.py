@@ -1,27 +1,6 @@
-from interpreter import Eval
 from dolfin import inner, dx, assemble, Function, sqrt
 from types import FunctionType
 import numpy as np
-
-
-def linear_combination(coefs, foos):
-    '''Construct a new function as a linear combinations sum_i coefs[i]*foos[i]'''
-    assert all(isinstance(f, Function) for f in foos)
-    assert len(coefs) == len(foos)
-    assert len(foos)
-
-    f = sum(ci*fi for ci, fi in zip(coefs, foos))
-    return Eval(f)
-
-
-def normalize(f, ip):
-    '''Normalize f to be ip(f, f) = 1'''
-    return Eval(f/sqrt(ip(f, f)))
-
-
-def nargs(f): 
-    '''Argument count of a function'''
-    return f.__code__.co_argcount
 
 
 def pod(functions, ip='l2'):
@@ -54,8 +33,8 @@ def pod(functions, ip='l2'):
     for i, fi in enumerate(functions):
         A[i, i] = ip(fi, fi)
         for j, fj in enumerate(functions[i+1:], i+1):
-            A[i, j] = ip(fi, fj)
-            A[j, i] = A[j, i]
+            value = ip(fi, fj)
+            A[i, j] = A[j, i] = value
 
     eigw, eigv = np.linalg.eigh(A)
     # Make eigv have rows as vectors
@@ -67,10 +46,37 @@ def pod(functions, ip='l2'):
 
     return eigw, pod_basis
 
+
+def linear_combination(coefs, foos):
+    '''Construct a new function as a linear combinations sum_i coefs[i]*foos[i]'''
+    assert all(isinstance(f, Function) for f in foos)
+    assert len(coefs) == len(foos)
+    assert len(foos)
+
+    # For the reasons of speed we do this in C (no Eval)
+    f = Function(foos[0].function_space())  # Zero
+    F = f.vector()
+    for ci, fi in zip(coefs, foos):
+        F.axpy(ci, fi.vector())
+
+    return f
+
+
+def normalize(f, ip):
+    '''Normalize f to be ip(f, f) = 1'''
+    f.vector()[:] *= 1./sqrt(ip(f, f))
+    return f
+
+
+def nargs(f): 
+    '''Argument count of a function'''
+    return f.__code__.co_argcount
+
 # ------------------------------------------------------------------------------
 
 if __name__ == '__main__':
     from dolfin import UnitSquareMesh, Expression, FunctionSpace, interpolate, File
+    from interpreter import Eval
     # Build a monomial basis for x, y, x**2, xy, y**2, ...
 
     deg = 4
