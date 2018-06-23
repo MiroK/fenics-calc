@@ -4,50 +4,52 @@ import numpy as np
 import ufl
 
 
-# Expression which when evaluated end up in the same space as the arguments
-# or require no reshaping of arraysbefore numpy is applied
-SAME_SPACE_RULES = {ufl.algebra.Sum: np.add,
-                    ufl.algebra.Abs: np.abs,
-                    ufl.algebra.Division: np.divide,
-                    ufl.algebra.Product: np.multiply,
-                    ufl.algebra.Power: np.power,
-                    ufl.mathfunctions.Sin: np.sin,
-                    ufl.mathfunctions.Cos: np.cos,
-                    ufl.mathfunctions.Sqrt: np.sqrt,
-                    ufl.mathfunctions.Exp: np.exp, 
-                    ufl.mathfunctions.Ln: np.log,
-                    ufl.mathfunctions.Tan: np.tan,
-                    ufl.mathfunctions.Sinh: np.sinh,
-                    ufl.mathfunctions.Cosh: np.cosh,
-                    ufl.mathfunctions.Tanh: np.tanh,
-                    ufl.mathfunctions.Asin: np.arcsin,
-                    ufl.mathfunctions.Acos: np.arccos,
-                    ufl.mathfunctions.Atan: np.arctan,
-                    ufl.mathfunctions.Atan2: np.arctan2}
-
-
-# Expression which when evaluated end up in general in different space than 
-# the arguments/require manipulations before numpy is applied
-DIFFERENT_SPACE_RULES = {ufl.tensoralgebra.Inverse: np.linalg.inv,
-                         ufl.tensoralgebra.Transposed: np.transpose,
-                         ufl.tensoralgebra.Sym: lambda A: 0.5*(A + A.T),
-                         ufl.tensoralgebra.Skew: lambda A: 0.5*(A - A.T),
-                         ufl.tensoralgebra.Deviatoric: lambda A: A - np.trace(A)*np.eye(len(A))*(1./len(A)),
-                         ufl.tensoralgebra.Cofactor: lambda A: np.linalg.det(A)*(np.linalg.inv(A)).T,
-                         ufl.tensoralgebra.Determinant: np.linalg.det,
-                         ufl.tensoralgebra.Trace: np.trace,
-                         ufl.tensoralgebra.Dot: np.dot,
-                         ufl.tensoralgebra.Cross: np.cross,
-                         ufl.tensoralgebra.Outer: np.outer,
-                         ufl.tensoralgebra.Inner: np.inner}
-
-
-def Eval(expr, ss_rules=SAME_SPACE_RULES, ds_rules=DIFFERENT_SPACE_RULES):
+def Eval(expr):
     '''
     This intepreter translates expr into a function object or a number. Expr is 
     defined via a subset of UFL language. Letting f, g be functions in V 
     Eval(op(f, g)) is a function in V with coefs given by (op(coefs(f), coef(g))).
     '''
+    # Expression which when evaluated end up in the same space as the arguments
+    # or require no reshaping of arraysbefore numpy is applied
+    no_reshape_type = {
+        ufl.algebra.Sum: np.add,
+        ufl.algebra.Abs: np.abs,
+        ufl.algebra.Division: np.divide,
+        ufl.algebra.Product: np.multiply,
+        ufl.algebra.Power: np.power,
+        ufl.mathfunctions.Sin: np.sin,
+        ufl.mathfunctions.Cos: np.cos,
+        ufl.mathfunctions.Sqrt: np.sqrt,
+        ufl.mathfunctions.Exp: np.exp, 
+        ufl.mathfunctions.Ln: np.log,
+        ufl.mathfunctions.Tan: np.tan,
+        ufl.mathfunctions.Sinh: np.sinh,
+        ufl.mathfunctions.Cosh: np.cosh,
+        ufl.mathfunctions.Tanh: np.tanh,
+        ufl.mathfunctions.Asin: np.arcsin,
+        ufl.mathfunctions.Acos: np.arccos,
+        ufl.mathfunctions.Atan: np.arctan,
+        ufl.mathfunctions.Atan2: np.arctan2
+    }
+
+    # Expression which when evaluated end up in general in different space than 
+    # the arguments/require manipulations before numpy is applied
+    reshape_type = {
+        ufl.tensoralgebra.Inverse: np.linalg.inv,
+        ufl.tensoralgebra.Transposed: np.transpose,
+        ufl.tensoralgebra.Sym: lambda A: 0.5*(A + A.T),
+        ufl.tensoralgebra.Skew: lambda A: 0.5*(A - A.T),
+        ufl.tensoralgebra.Deviatoric: lambda A: A - np.trace(A)*np.eye(len(A))*(1./len(A)),
+        ufl.tensoralgebra.Cofactor: lambda A: np.linalg.det(A)*(np.linalg.inv(A)).T,
+        ufl.tensoralgebra.Determinant: np.linalg.det,
+        ufl.tensoralgebra.Trace: np.trace,
+        ufl.tensoralgebra.Dot: np.dot,
+        ufl.tensoralgebra.Cross: np.cross,
+        ufl.tensoralgebra.Outer: np.outer,
+        ufl.tensoralgebra.Inner: np.inner
+    }
+
     # Terminals/base cases
     if isinstance(expr, (Function, int, float)):
         return expr
@@ -56,19 +58,18 @@ def Eval(expr, ss_rules=SAME_SPACE_RULES, ds_rules=DIFFERENT_SPACE_RULES):
         return expr.value()
         
     expr_type = type(expr)
-    # Require reshaping
-    if expr_type in ds_rules:
-        # Exception to the rules are some ops with scalar args
-        if isinstance(expr, (ufl.tensoralgebra.Inner, ufl.tensoralgebra.Dot)):
-            if all(a.ufl_shape == () for arg in expr.ulf_operands):
-                return Eval(expr.ufl_operands[0]*expr.ufl_operands[1])
+    # Require reshaping and all args are functions
+    if expr_type in reshape_type:
+        return numpy_reshaped(expr, op=reshape_type[expr_type])
 
-        return numpy_reshaped(expr, op=ds_rules[expr_type])
+    # Indexing [] is special as the second argument gives slicing
+    if isinstance(expr, ufl.indexed.Indexed):
+        return indexed_rule(expr)
 
     # No reshaping neeed
     args = map(Eval, expr.ufl_operands)
 
-    op = ss_rules[expr_type]
+    op = no_reshape_type[expr_type]
     # Manipulate coefs of arguments to get coefs of the expression
     coefs = map(coefs_of, args)
     V_coefs = op(*coefs)    
@@ -117,6 +118,11 @@ def numpy_reshaped(expr, op):
     '''Get the coefs by applying the numpy op to reshaped argument coefficients'''
     args = map(Eval, expr.ufl_operands)
 
+    # Exception to the rules are some ops with scalar args
+    if isinstance(expr, (ufl.tensoralgebra.Inner, ufl.tensoralgebra.Dot)):
+        if all(a.ufl_shape == () for arg in args):
+            return Eval(args[0]*args[1])
+
     # Do we have V x V x ... spaces?
     sub_elm = common_sub_element([space_of((arg, )) for arg in args])
     
@@ -134,8 +140,7 @@ def numpy_reshaped(expr, op):
 
         # Get values for op by reshaping
         if shape:
-            reshape = lambda x, s=shape: x.reshape(s)
-            get = (reshape(arg_coefs[index]) for index in indices)
+            get = (arg_coefs[index].reshape(shape) for index in indices)
         else:
             get = (arg_coefs[index] for index in indices)
 
@@ -149,18 +154,38 @@ def numpy_reshaped(expr, op):
     # How to reshape the result and assign
     if shape_res:
         dofs = imap(list, numpy_op_indices(V_res, shape_res))
-        flat = lambda x: x.flatten()
+        reshape = lambda x: x.flatten()
     else:
         dofs = numpy_op_indices(V_res, shape_res)
-        flat = lambda x: x
+        reshape = lambda x: x
         
     # Fill coefs of the result expression
     coefs_res = Function(V_res).vector().get_local()
     for dof, dof_args in izip(dofs, args):
-        coefs_res[dof] = flat(op(*dof_args))
+        coefs_res[dof] = reshape(op(*dof_args))
     # NOTE: make_function so that there is only one place (hopefully)
     # where parallelism needs to be addressed
     return make_function(V_res, coefs_res)
+
+
+def indexed_rule(expr):
+    '''Function representing f[index] so we end up with scalar'''
+    f, index = expr.ufl_operands
+    # Don't allow for slices
+    assert all(isinstance(i, ufl.indexed.FixedIndex) for i in index.indices())
+    # What to index
+    f = Eval(f)
+    V = f.function_space()
+    # Make sure that this is tensor product space
+    elm_indexed = common_sub_element((V, ))
+    # We want to flat the index to be used with dofmap extracting
+    index = flat_index(map(int, index.indices()), f.ufl_shape)
+    # Get the values
+    coefs = coefs_of(f)
+    coefs_indexed = coefs[V.sub(index).dofmap().dofs()]
+    # Shape of the value must be scalar
+    V_indexed = make_space(elm_indexed, (), V.mesh())
+    return make_function(V_indexed, coefs_indexed)
 
 
 def numpy_op_indices(V, shape):
@@ -209,6 +234,18 @@ def make_space(V, shape, mesh):
     return FunctionSpace(mesh, elm)
 
 
+def flat_index(indices, shape):
+    '''(1, 2) for (3, 3) is 1*3 + 2'''
+    assert len(indices) == len(shape)
+
+    i0, indices = indices[0], indices[1:]
+    s0, shape = shape[0], shape[1:]
+
+    if not indices:
+        return i0
+    else:
+        return i0*s0 + flat_index(indices, shape)
+
 # ------------------------------------------------------------------------------
 
 if __name__ == '__main__':
@@ -255,5 +292,10 @@ if __name__ == '__main__':
     true = interpolate(Constant(3), V)
     print assemble(inner(me-true, me-true)*dx(domain=mesh))
     
-    # FIXME:
-    # Indexed
+    # -----
+
+    expr = sym(u)[1, 1]
+    me = Eval(expr)
+    true = interpolate(Constant(3), V)
+    print assemble(inner(me-true, me-true)*dx(domain=mesh))
+
