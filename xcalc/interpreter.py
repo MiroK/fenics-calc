@@ -65,18 +65,19 @@ def Eval(expr):
         return numpy_reshaped(expr, op=reshape_type[expr_type])
 
     # Indexing [] is special as the second argument gives slicing
-    if isinstance(expr, ufl.indexed.Indexed):
+    if isinstance(expr, (ufl.indexed.Indexed, ufl.tensors.ComponentTensor)):
         return indexed_rule(expr)
 
     # No reshaping neeed
-    args = map(Eval, expr.ufl_operands)
+    op = no_reshape_type[expr_type]  # Throw if we don't support this
 
-    op = no_reshape_type[expr_type]
+    args = map(Eval, expr.ufl_operands)
     # Manipulate coefs of arguments to get coefs of the expression
     coefs = map(coefs_of, args)
     V_coefs = op(*coefs)    
     # Make that function
     V = space_of(args)
+
     return make_function(V, V_coefs)
 
 
@@ -95,22 +96,24 @@ def numpy_reshaped(expr, op):
 
 def indexed_rule(expr):
     '''Function representing f[index] so we end up with scalar'''
+    shape_res = expr.ufl_shape
+    # FIXME: A[:, 1] is a ComponentTensor. They are other ways to get that 
+    # node and these would currently not be supported
+    if isinstance(expr, ufl.tensors.ComponentTensor):
+        expr = expr.ufl_operands[0]
+
     f, index = expr.ufl_operands
-    # Don't allow for slices
-    assert all(isinstance(i, ufl.indexed.FixedIndex) for i in index.indices())
     # What to index
     f = Eval(f)
-    V = f.function_space()
-    # Make sure that this is tensor product space
-    elm_indexed = common_sub_element((V, ))
-    # We want to flat the index to be used with dofmap extracting
-    index = flat_index(map(int, index.indices()), f.ufl_shape)
-    # Get the values
-    coefs = coefs_of(f)
-    coefs_indexed = coefs[V.sub(index).dofmap().dofs()]
-    # Shape of the value must be scalar
-    V_indexed = make_space(elm_indexed, (), V.mesh())
-    return make_function(V_indexed, coefs_indexed)
+    # How to index 
+    shape = f.ufl_shape
+    indices = tuple(int(index) if isinstance(index, ufl.indexed.FixedIndex) else slice(l)
+                    for l, index in zip(shape, index.indices()))
+    # This could be implemented more efficiently (see earilier commits)
+    # However, below is a more ideas which is that op is just a getitem
+    op = lambda A, i=indices: A[i]
+    
+    return numpy_op_foo((f, ), op=op, shape_res=shape_res)
 
 # ------------------------------------------------------------------------------
 
@@ -131,9 +134,7 @@ if __name__ == '__main__':
     expr = a*u + b*v
 
     me = Eval(expr)
-        
     true = Expression('a*f+b*g', f=f, g=g, a=a, b=b, degree=1)
-            
     print assemble(inner(me-true, me-true)*dx)
 
     # ---- 
@@ -164,4 +165,12 @@ if __name__ == '__main__':
     me = Eval(expr)
     true = interpolate(Constant(3), V)
     print assemble(inner(me-true, me-true)*dx(domain=mesh))
+
+    # -----
+
+    expr = sym(u)[:, 1]
+    me = Eval(expr)
+    true = interpolate(Constant((1.5, 3)), VectorFunctionSpace(mesh, 'DG', 0))
+    print assemble(inner(me-true, me-true)*dx(domain=mesh))
+
 
