@@ -1,12 +1,24 @@
+from ufl.corealg.traversal import traverse_unique_terminals
 from dolfin import Function
 import numpy as np
 import ufl
 
-from itertools import imap
+from itertools import imap, repeat
+import operator
+import timeseries
 from utils import *
 
 
 def Eval(expr):
+    '''
+    This intepreter translates expr into a function object or a number. Expr is 
+    defined via a subset of UFL language. Letting f, g be functions in V 
+    Eval(op(f, g)) is a function in V with coefs given by (op(coefs(f), coef(g))).
+    '''
+    return Interpreter.eval(expr)
+
+
+class Interpreter(object):
     '''
     This intepreter translates expr into a function object or a number. Expr is 
     defined via a subset of UFL language. Letting f, g be functions in V 
@@ -51,44 +63,67 @@ def Eval(expr):
         ufl.tensoralgebra.Outer: np.outer,
         ufl.tensoralgebra.Inner: np.inner
     }
+    
+    # Other's where Eval works
+    terminal_type = (Function, int, float, timeseries.TempSeries)
+    value_type = (ufl.algebra.ScalarValue, ufl.algebra.IntValue)
+    index_type = (ufl.indexed.Indexed, ufl.tensors.ComponentTensor)
 
-    # Terminals/base cases
-    if isinstance(expr, (Function, int, float)):
-        return expr
+    eval_types = reduce(operator.or_, (set(no_reshape_type.keys()),
+                                       set(reshape_type.keys()),
+                                       set(terminal_type),
+                                       set(value_type),
+                                       set(index_type)))
 
-    if isinstance(expr, (ufl.algebra.ScalarValue, ufl.algebra.IntValue)):
-        return expr.value()
+    @staticmethod
+    def eval(expr):
+        # Terminals/base cases (also TempSeries)
+        if isinstance(expr, Interpreter.terminal_type): return expr
+
+        if isinstance(expr, Interpreter.value_type): return expr.value()
         
-    expr_type = type(expr)
-    # Require reshaping and all args are functions
-    if expr_type in reshape_type:
-        return numpy_reshaped(expr, op=reshape_type[expr_type])
+        # Okay: now we have expr with arguments. If this expression involves 
+        # times series then all the non number arguments should be compatible 
+        # time series
+        terminals = filter(lambda t: isinstance(t, Function), traverse_unique_terminals(expr))
+        # Don't mix function and terminals
+        series = filter(lambda t: isinstance(t, timeseries.TempSeries), terminals)
 
-    # Indexing [] is special as the second argument gives slicing
-    if isinstance(expr, (ufl.indexed.Indexed, ufl.tensors.ComponentTensor)):
-        return indexed_rule(expr)
+        assert len(series) == len(terminals) or len(series) == 0, map(len, (series, terminals))
+        # For series, we apply op to functions and make new series
+        if series:
+            assert not isinstance(expr, Interpreter.index_type)
+            return series_rule(expr)
 
-    # No reshaping neeed
-    op = no_reshape_type[expr_type]  # Throw if we don't support this
+        expr_type = type(expr)
+        # Require reshaping and all args are functions
+        if expr_type in Interpreter.reshape_type: 
+            return numpy_reshaped(expr, op=Interpreter.reshape_type[expr_type])
 
-    args = map(Eval, expr.ufl_operands)
-    # Manipulate coefs of arguments to get coefs of the expression
-    coefs = map(coefs_of, args)
-    V_coefs = op(*coefs)    
-    # Make that function
-    V = space_of(args)
+        # Indexing [] is special as the second argument gives slicing
+        if isinstance(expr, Interpreter.index_type): return indexed_rule(expr)
 
-    return make_function(V, V_coefs)
+        # No reshaping neeed
+        op = Interpreter.no_reshape_type[expr_type]  # Throw if we don't support this
+
+        args = map(Interpreter.eval, expr.ufl_operands)
+        # Manipulate coefs of arguments to get coefs of the expression
+        coefs = map(coefs_of, args)
+        V_coefs = op(*coefs)    
+        # Make that function
+        V = space_of(args)
+
+        return make_function(V, V_coefs)
 
 
 def numpy_reshaped(expr, op):
     '''Get the coefs by applying the numpy op to reshaped argument coefficients'''
-    args = map(Eval, expr.ufl_operands)
+    args = map(Interpreter.eval, expr.ufl_operands)
 
     # Exception to the rules are some ops with scalar args
     if isinstance(expr, (ufl.tensoralgebra.Inner, ufl.tensoralgebra.Dot)):
         if all(a.ufl_shape == () for arg in args):
-            return Eval(args[0]*args[1])
+            return Interpreter.eval(args[0]*args[1])
 
     # Construct by numpy with op applied args of expr and reshaping as shape_res
     return numpy_op_foo(args, op=op, shape_res=expr.ufl_shape)
@@ -104,7 +139,7 @@ def indexed_rule(expr):
 
     f, index = expr.ufl_operands
     # What to index
-    f = Eval(f)
+    f = Interpreter.eval(f)
     # How to index 
     shape = f.ufl_shape
     indices = tuple(int(index) if isinstance(index, ufl.indexed.FixedIndex) else slice(l)
@@ -114,6 +149,25 @@ def indexed_rule(expr):
     op = lambda A, i=indices: A[i]
     
     return numpy_op_foo((f, ), op=op, shape_res=shape_res)
+
+
+def series_rule(expr):
+    '''Eval expression where the terminals are time series'''
+    # Make first sure that the series are compatible in the sense
+    # of having same f and time interval
+    times = timeseries.common_interval(list(traverse_unique_terminals(expr)))
+    assert times
+
+    series = map(Interpreter.eval, expr.ufl_operands)
+
+    # We apply the op to functions in the series and construct a new one
+    args = izip(*[iter(s) if isinstance(s, timeseries.TempSeries)
+                  else repeat(Interpreter.eval(s))
+                  for s in series])
+
+    functions = [Interpreter.eval(apply(type(expr), arg)) for arg in args]
+
+    return timeseries.TempSeries(zip(functions, times))
 
 # ------------------------------------------------------------------------------
 
@@ -173,4 +227,11 @@ if __name__ == '__main__':
     true = interpolate(Constant((1.5, 3)), VectorFunctionSpace(mesh, 'DG', 0))
     print assemble(inner(me-true, me-true)*dx(domain=mesh))
 
+    # ------ 
+    a0 = (interpolate(Constant(1), V), 0)
+    a1 = (interpolate(Constant(2), V), 1)
+    series = timeseries.TempSeries([a0, a1])
 
+    x = Eval(2*series + 3*series)
+    print assemble(inner(Constant(5)-x[0], Constant(5)-x[0])*dx(domain=mesh))
+    print assemble(inner(Constant(10)-x[1], Constant(10)-x[1])*dx(domain=mesh))
