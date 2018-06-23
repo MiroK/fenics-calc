@@ -5,6 +5,7 @@ import ufl
 
 
 # Expression which when evaluated end up in the same space as the arguments
+# or require no reshaping of arraysbefore numpy is applied
 SAME_SPACE_RULES = {ufl.algebra.Sum: np.add,
                     ufl.algebra.Abs: np.abs,
                     ufl.algebra.Division: np.divide,
@@ -55,13 +56,16 @@ def Eval(expr, ss_rules=SAME_SPACE_RULES, ds_rules=DIFFERENT_SPACE_RULES):
         return expr.value()
         
     expr_type = type(expr)
+    # Require reshaping
     if expr_type in ds_rules:
+        # Exception to the rules are some ops with scalar args
+        if isinstance(expr, (ufl.tensoralgebra.Inner, ufl.tensoralgebra.Dot)):
+            if all(a.ufl_shape == () for arg in expr.ulf_operands):
+                return Eval(expr.ufl_operands[0]*expr.ufl_operands[1])
+
         return numpy_reshaped(expr, op=ds_rules[expr_type])
 
-    # NOTE: for now we assume that all the expression arguments are either 
-    # numbers or functions in the same function space. We can get the coefficients
-    # by straight forward manipulations of the coefficient arrays. The reshaping 
-    # rules would be identity
+    # No reshaping neeed
     args = map(Eval, expr.ufl_operands)
 
     op = ss_rules[expr_type]
@@ -112,6 +116,7 @@ def space_of(foos):
 def numpy_reshaped(expr, op):
     '''Get the coefs by applying the numpy op to reshaped argument coefficients'''
     args = map(Eval, expr.ufl_operands)
+
     # Do we have V x V x ... spaces?
     sub_elm = common_sub_element([space_of((arg, )) for arg in args])
     
@@ -153,13 +158,14 @@ def numpy_reshaped(expr, op):
     coefs_res = Function(V_res).vector().get_local()
     for dof, dof_args in izip(dofs, args):
         coefs_res[dof] = flat(op(*dof_args))
-
+    # NOTE: make_function so that there is only one place (hopefully)
+    # where parallelism needs to be addressed
     return make_function(V_res, coefs_res)
 
 
 def numpy_op_indices(V, shape):
     '''Iterator over dofs of V in a logical way'''
-    # next(numpy_of_indices(V)) get indices for accesing coef of function in V
+    # next(numpy_of_indices(V)) gets indices for accessing coef of function in V
     # in a way that after reshaping the values can be used by numpy
     nsubs = V.num_sub_spaces()
     # Get will give us e.g matrix to go with det to set the value of det
@@ -179,12 +185,13 @@ def common_sub_element(spaces):
     for space in spaces:
         if not space.num_sub_spaces():
             V_ = space.ufl_element()
+        # V x V x V ... => V
         else:
             V_, = set(space.ufl_element().sub_elements())
-        
+        # Unset or agrees
         assert V is None or V == V_
-
         V = V_
+    # All is well
     return V
 
 
