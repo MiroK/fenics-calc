@@ -1,5 +1,5 @@
 import xml.etree.ElementTree as ET
-from function_read import read_h5_function
+from function_read import read_h5_function, read_vtu_function
 from dolfin import (Function, XDMFFile, HDF5File, FunctionSpace,
                     VectorFunctionSpace, TensorFunctionSpace)
 from utils import space_of
@@ -62,28 +62,46 @@ def common_interval(series):
     return interval
 
 
-def PVDTempSeries(path, V, first=0, last=None):
-    '''
-    Read in the temp series of functions from PVD file
-    '''
-    # NOTE: vtu does NOT save higher than linear polynomials
-    from vtk_io import read_vtu_function
+def get_P1_space(V):
+    '''Get the Lagrange CG1 space corresponding to V'''
+    # This is how in essence FEniCS 2017.2.0 dumps data, i.e. there is
+    # no support for higher order spaces
+    assert V.ufl_element().family() != 'Discontinuous Lagrange'  # Cell data needed
+    
+    mesh = V.mesh()
+    elm = V.ufl_element()
+    if elm.value_shape() == ():
+        return FunctionSpace(mesh, 'CG', 1)
+    
+    if len(elm.value_shape()) == 1:
+        return VectorFunctionSpace(mesh, 'CG', 1)
 
+    return TensorFunctionSpace(mesh, 'CG', 1)
+
+
+def PVDTempSeries(path, V, first=0, last=None):
+    '''Read in the temp series of functions from PVD file'''
     _, ext = os.path.splitext(path)
     assert ext == '.pvd'
 
+    V = get_P1_space(V)
+
     tree = ET.parse(path)
     collection = list(tree.getroot())[0]
+    path = os.path.dirname(os.path.abspath(path))
     # Read in paths/timestamps for VTUs. NOTE: as thus is supposed to be serial 
     # assert part 0
     vtus, times = [], []
     for dataset in collection:
         assert dataset.attrib['part'] == '0'
-        vtus.append((dataset.attrib['file'], float(dataset.attrib['timestep'])))
+        
+        vtus.append(os.path.join(path, dataset.attrib['file']))
+        times.append(float(dataset.attrib['timestep']))
     
-    vtus = vtus[slice(first, last, None)]
+    vtus, times = vtus[slice(first, last, None)], times[slice(first, last, None)]
     # path.vtu -> function. But vertex values!!!!
-    ft_pairs = [(read_vtu_function(path, V), t) for path, t in vtus]
+    functions = read_vtu_function(vtus, V)
+    ft_pairs = zip(functions, times)
 
     return TempSeries(ft_pairs)
 
@@ -92,17 +110,10 @@ def XDMFTempSeries(path, V, first=0, last=None):
     '''Read in the temp series of functions from XDMF file'''
     # NOTE: in 2017.2.0 fenics only stores vertex values so CG1 functions
     # is what we go for
-    mesh = V.mesh()
-    elm = V.ufl_element()
-    if elm.value_shape() == ():
-        V = FunctionSpace(mesh, 'CG', 1)
-    elif len(elm.value_shape()) == 1:
-        V = VectorFunctionSpace(mesh, 'CG', 1)
-    else:
-        V = TensorFunctionSpace(mesh, 'CG', 1)
-
     _, ext = os.path.splitext(path)
     assert ext == '.xdmf'
+
+    V = get_P1_space(V)
 
     tree = ET.parse(path)
     domain = list(tree.getroot())[0]
@@ -123,7 +134,7 @@ def XDMFTempSeries(path, V, first=0, last=None):
         
     times = times[slice(first, last, None)]
     # We read visualization vector from this
-    h5_file = os.path.join(os.getcwd(), h5_file)
+    h5_file = os.path.join(os.path.dirname(os.path.abspath(path)), h5_file)
     functions = read_h5_function(h5_file, times, V)
     
     ft_pairs = zip(functions, map(float, times))
@@ -149,53 +160,106 @@ if __name__ == '__main__':
 
     print type(c[0:1])
 
+    #
+    # XDMF
+    #
+    if True:
+        # --- Check scalar
+        mesh = UnitSquareMesh(3, 3)
+        V = FunctionSpace(mesh, 'CG', 1)
+        f0 = interpolate(Expression('x[0]', degree=1), V)
+        f1 = interpolate(Expression('x[0]', degree=1), V)
+
+        with XDMFFile(mesh.mpi_comm(), 'xdmf_test.xdmf') as out:
+            f0.rename('f', '0')
+            out.write(f0, 0.)
+
+            f1.rename('f', '0')
+            out.write(f1, 1.)
+
+        # PVDTempSeries('pod_test.pvd', V)
+        series = XDMFTempSeries('xdmf_test.xdmf', V)
+        print assemble(inner(f0 - series[0], f0 - series[0])*dx(domain=mesh))
+        print assemble(inner(f1 - series[1], f1 - series[1])*dx(domain=mesh))
+
+        # --- Check vector
+        V = VectorFunctionSpace(mesh, 'CG', 1)
+        f0 = interpolate(Expression(('x[0]', 'x[1]'), degree=1), V)
+        f1 = interpolate(Expression(('2*x[0]', '-3*x[1]'), degree=1), V)
+
+        with XDMFFile(mesh.mpi_comm(), 'xdmf_test.xdmf') as out:
+            f0.rename('f', '0')
+            out.write(f0, 0.)
+
+            f1.rename('f', '0')
+            out.write(f1, 1.)
+
+        series = XDMFTempSeries('xdmf_test.xdmf', V)
+        print assemble(inner(f0 - series[0], f0 - series[0])*dx(domain=mesh))
+        print assemble(inner(f1 - series[1], f1 - series[1])*dx(domain=mesh))
+
+        # --- Check tensor
+        V = TensorFunctionSpace(mesh, 'CG', 1)
+        f0 = interpolate(Expression((('x[0]', 'x[1]'), ('x[0]', '-x[1]')),degree=1),
+                         V)
+        f1 = interpolate(Expression((('2*x[0]', '-3*x[1]'), ('4*x[0]', '-3*x[1]')), degree=1),
+                         V)
+
+        with XDMFFile(mesh.mpi_comm(), 'xdmf_test.xdmf') as out:
+            f0.rename('f', '0')
+            out.write(f0, 0.)
+
+            f1.rename('f', '0')
+            out.write(f1, 1.)
+
     # --- Check scalar
     mesh = UnitSquareMesh(3, 3)
     V = FunctionSpace(mesh, 'CG', 1)
     f0 = interpolate(Expression('x[0]', degree=1), V)
-    f1 = interpolate(Expression('x[0]', degree=1), V)
+    f1 = interpolate(Expression('x[1]', degree=1), V)
 
-    with XDMFFile(mesh.mpi_comm(), 'xdmf_test.xdmf') as out:
-        f0.rename('f', '0')
-        out.write(f0, 0.)
+    out = File('pvd_test.pvd')
+    f0.rename('f', '0')
+    out << (f0, 0.)
+        
+    f1.rename('f', '0')
+    out << (f1, 1.)
 
-        f1.rename('f', '0')
-        out.write(f1, 1.)
-
-    # PVDTempSeries('pod_test.pvd', V)
-    series = XDMFTempSeries('xdmf_test.xdmf', V)
+    series = PVDTempSeries('pvd_test.pvd', V)
     print assemble(inner(f0 - series[0], f0 - series[0])*dx(domain=mesh))
     print assemble(inner(f1 - series[1], f1 - series[1])*dx(domain=mesh))
 
-    # --- Check vector
+    # --- Vector
     V = VectorFunctionSpace(mesh, 'CG', 1)
     f0 = interpolate(Expression(('x[0]', 'x[1]'), degree=1), V)
     f1 = interpolate(Expression(('2*x[0]', '-3*x[1]'), degree=1), V)
 
-    with XDMFFile(mesh.mpi_comm(), 'xdmf_test.xdmf') as out:
-        f0.rename('f', '0')
-        out.write(f0, 0.)
+    out = File('pvd_test.pvd')
+    f0.rename('f', '0')
+    out << (f0, 0.)
+        
+    f1.rename('f', '0')
+    out << (f1, 1.)
 
-        f1.rename('f', '0')
-        out.write(f1, 1.)
-
-    series = XDMFTempSeries('xdmf_test.xdmf', V)
+    series = PVDTempSeries('pvd_test.pvd', V)
     print assemble(inner(f0 - series[0], f0 - series[0])*dx(domain=mesh))
     print assemble(inner(f1 - series[1], f1 - series[1])*dx(domain=mesh))
-    exit()
-    
-    # --- Check tensor
+
+    # --- Tensor
     V = TensorFunctionSpace(mesh, 'CG', 1)
-    f0 = interpolate(Expression((('x[0]', 'x[1]'), ('x[0]', 'x[1]')),degree=1),
-                     V)
-    f1 = interpolate(Expression((('2*x[0]', '-3*x[1]'), ('2*x[0]', '-3*x[1]')), degree=1),
-                     V)
+    f0 = interpolate(Expression((('x[0]', 'x[1]'), ('2*x[0]', '-3*x[1]')),
+                                degree=1), V)
+    f1 = interpolate(Expression((('2*x[0]', '-3*x[1]'), ('x[0]', 'x[1]')),
+                                degree=1), V)
 
-    print f0.vector().local_size()
-    with XDMFFile(mesh.mpi_comm(), 'xdmf_test.xdmf') as out:
-        f0.rename('f', '0')
-        out.write(f0, 0.)
+    out = File('pvd_test.pvd')
+    f0.rename('f', '0')
+    out << (f0, 0.)
+        
+    f1.rename('f', '0')
+    out << (f1, 1.)
 
-        f1.rename('f', '0')
-        out.write(f1, 1.)
+    series = PVDTempSeries('pvd_test.pvd', V)
+    print assemble(inner(f0 - series[0], f0 - series[0])*dx(domain=mesh))
+    print assemble(inner(f1 - series[1], f1 - series[1])*dx(domain=mesh))
 
