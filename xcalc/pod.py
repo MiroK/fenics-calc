@@ -76,13 +76,14 @@ def nargs(f):
 
 if __name__ == '__main__':
     from dolfin import UnitSquareMesh, Expression, FunctionSpace, interpolate, File
+    from dolfin import XDMFFile
     from interpreter import Eval
     # Build a monomial basis for x, y, x**2, xy, y**2, ...
 
     deg = 4
 
-    mesh = UnitSquareMesh(64, 64)
-    V = FunctionSpace(mesh, 'CG', 1)
+    mesh = UnitSquareMesh(3, 3)
+    V = FunctionSpace(mesh, 'CG', 3)
     x = interpolate(Expression('x[0]', degree=1), V)
     y = interpolate(Expression('x[1]', degree=1), V)
 
@@ -98,3 +99,9 @@ if __name__ == '__main__':
     for i, f in enumerate(pod_basis):
         f.rename('f', '0')
         out << (f, float(i))
+
+
+    with XDMFFile(mesh.mpi_comm(), 'pod_test.xdmf') as out:
+        for i, f in enumerate(pod_basis):
+            f.rename('f', '0')
+            out.write(f, float(i))

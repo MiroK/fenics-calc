@@ -1,5 +1,7 @@
 import xml.etree.ElementTree as ET
-from dolfin import Function
+from function_read import read_h5_function
+from dolfin import (Function, XDMFFile, HDF5File, FunctionSpace,
+                    VectorFunctionSpace, TensorFunctionSpace)
 from utils import space_of
 import numpy as np
 import os
@@ -61,7 +63,12 @@ def common_interval(series):
 
 
 def PVDTempSeries(path, V, first=0, last=None):
-    '''Read in the temp series of functions in V from PVD file'''
+    '''
+    Read in the temp series of functions from PVD file
+    '''
+    # NOTE: vtu does NOT save higher than linear polynomials
+    from vtk_io import read_vtu_function
+
     _, ext = os.path.splitext(path)
     assert ext == '.pvd'
 
@@ -69,14 +76,57 @@ def PVDTempSeries(path, V, first=0, last=None):
     collection = list(tree.getroot())[0]
     # Read in paths/timestamps for VTUs. NOTE: as thus is supposed to be serial 
     # assert part 0
-    vtus = []
+    vtus, times = [], []
     for dataset in collection:
         assert dataset.attrib['part'] == '0'
         vtus.append((dataset.attrib['file'], float(dataset.attrib['timestep'])))
     
     vtus = vtus[slice(first, last, None)]
-    # path.vtu -> function
+    # path.vtu -> function. But vertex values!!!!
     ft_pairs = [(read_vtu_function(path, V), t) for path, t in vtus]
+
+    return TempSeries(ft_pairs)
+
+
+def XDMFTempSeries(path, V, first=0, last=None):
+    '''Read in the temp series of functions from XDMF file'''
+    # NOTE: in 2017.2.0 fenics only stores vertex values so CG1 functions
+    # is what we go for
+    mesh = V.mesh()
+    elm = V.ufl_element()
+    if elm.value_shape() == ():
+        V = FunctionSpace(mesh, 'CG', 1)
+    elif len(elm.value_shape()) == 1:
+        V = VectorFunctionSpace(mesh, 'CG', 1)
+    else:
+        V = TensorFunctionSpace(mesh, 'CG', 1)
+
+    _, ext = os.path.splitext(path)
+    assert ext == '.xdmf'
+
+    tree = ET.parse(path)
+    domain = list(tree.getroot())[0]
+    grid = list(domain)[0]
+
+    times = []  # Only collect time stamps so that we access in right order
+    h5_file = ''  # Consistency of piece as VisualisationVector ...
+    for item in grid:
+        _, __, time, attrib = list(item)
+        time = time.attrib['Value']
+        times.append(time)
+
+        piece = list(attrib)[0]
+        h5_file_, fdata = piece.text.split(':/')
+
+        assert not h5_file or h5_file == h5_file_
+        h5_file = h5_file_
+        
+    times = times[slice(first, last, None)]
+    # We read visualization vector from this
+    h5_file = os.path.join(os.getcwd(), h5_file)
+    functions = read_h5_function(h5_file, times, V)
+    
+    ft_pairs = zip(functions, map(float, times))
 
     return TempSeries(ft_pairs)
     
@@ -99,9 +149,53 @@ if __name__ == '__main__':
 
     print type(c[0:1])
 
-    # ---
-
-    mesh = UnitSquareMesh(64, 64)
+    # --- Check scalar
+    mesh = UnitSquareMesh(3, 3)
     V = FunctionSpace(mesh, 'CG', 1)
+    f0 = interpolate(Expression('x[0]', degree=1), V)
+    f1 = interpolate(Expression('x[0]', degree=1), V)
 
-    PVDTempSeries('pod_test.pvd', V)
+    with XDMFFile(mesh.mpi_comm(), 'xdmf_test.xdmf') as out:
+        f0.rename('f', '0')
+        out.write(f0, 0.)
+
+        f1.rename('f', '0')
+        out.write(f1, 1.)
+
+    # PVDTempSeries('pod_test.pvd', V)
+    series = XDMFTempSeries('xdmf_test.xdmf', V)
+    print assemble(inner(f0 - series[0], f0 - series[0])*dx(domain=mesh))
+    print assemble(inner(f1 - series[1], f1 - series[1])*dx(domain=mesh))
+
+    # --- Check vector
+    V = VectorFunctionSpace(mesh, 'CG', 1)
+    f0 = interpolate(Expression(('x[0]', 'x[1]'), degree=1), V)
+    f1 = interpolate(Expression(('2*x[0]', '-3*x[1]'), degree=1), V)
+
+    with XDMFFile(mesh.mpi_comm(), 'xdmf_test.xdmf') as out:
+        f0.rename('f', '0')
+        out.write(f0, 0.)
+
+        f1.rename('f', '0')
+        out.write(f1, 1.)
+
+    series = XDMFTempSeries('xdmf_test.xdmf', V)
+    print assemble(inner(f0 - series[0], f0 - series[0])*dx(domain=mesh))
+    print assemble(inner(f1 - series[1], f1 - series[1])*dx(domain=mesh))
+    exit()
+    
+    # --- Check tensor
+    V = TensorFunctionSpace(mesh, 'CG', 1)
+    f0 = interpolate(Expression((('x[0]', 'x[1]'), ('x[0]', 'x[1]')),degree=1),
+                     V)
+    f1 = interpolate(Expression((('2*x[0]', '-3*x[1]'), ('2*x[0]', '-3*x[1]')), degree=1),
+                     V)
+
+    print f0.vector().local_size()
+    with XDMFFile(mesh.mpi_comm(), 'xdmf_test.xdmf') as out:
+        f0.rename('f', '0')
+        out.write(f0, 0.)
+
+        f1.rename('f', '0')
+        out.write(f1, 1.)
+
