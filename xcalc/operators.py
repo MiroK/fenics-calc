@@ -1,6 +1,6 @@
 # Some pseudo nodes (function constructors) that could be useful
 # NOTE: unlike ufl nodes these are not lazy, i.e Eval immediately
-from dolfin import Constant, interpolate, Function
+from dolfin import Constant, interpolate, Function, as_backend_type
 from utils import numpy_op_foo
 from interpreter import Eval
 import numpy as np
@@ -54,8 +54,8 @@ def Mean(series):
     # Int
     dts = np.diff(series.times)
     for dt, (f0, f1) in zip(dts, zip(series.functions[:-1], series.functions[1:])):
-        x.axpy(dt/2, f0.vector())  # (f0+f1)*dt/2
-        x.axpy(dt/2, f1.vector())
+        x.axpy(dt/2., f0.vector())  # (f0+f1)*dt/2
+        x.axpy(dt/2., f1.vector())
     # Time interval scaling
     x /= dts.sum()
 
@@ -74,12 +74,14 @@ def RMS(series):
     f_vectors = [as_backend_type(f.vector()).vec() for f in series.functions]
     for dt, (f0, f1) in zip(dts, zip(f_vectors[:-1], f_vectors[1:])):
         y.pointwiseMult(f0, f0)  # y = f0**2
-        x.axpy(dt/2, y)  # (f0**2+f1**2)*dt/2
+        x.axpy(dt/2., y)  # (f0**2+f1**2)*dt/2
 
         y.pointwiseMult(f1, f1)  # y = f1**2
-        x.axpy(dt/2, y)
+        x.axpy(dt/2., y)
     # Time interval scaling
     x /= dts.sum()
+    # sqrt
+    x.sqrtabs()
 
     return rms
     
@@ -87,6 +89,8 @@ def RMS(series):
 
 if __name__ == '__main__':
     from dolfin import UnitSquareMesh, TensorFunctionSpace, Function, interpolate
+    from dolfin import FunctionSpace 
+    import timeseries
 
     A = np.array([[1, -2], [-3, 1]])
 
@@ -100,3 +104,13 @@ if __name__ == '__main__':
     g = Eigv(f+f)
     print g(0.5, 0.5)    
     print np.linalg.eig(A+A)[1].T
+
+    V = FunctionSpace(mesh, 'CG', 1)
+    a0 = (interpolate(Constant(1), V), 0)
+    a1 = (interpolate(Constant(2), V), 1)
+    series = timeseries.TempSeries([a0, a1])
+
+    x = Eval(2*series + 3*series)
+
+    print Mean(x)(0.5, 0.5)
+    print RMS(series)(0.5, 0.5)

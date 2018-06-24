@@ -161,8 +161,7 @@ def series_rule(expr):
     series = map(Interpreter.eval, expr.ufl_operands)
 
     # We apply the op to functions in the series and construct a new one
-    args = izip(*[iter(s) if isinstance(s, timeseries.TempSeries)
-                  else repeat(Interpreter.eval(s))
+    args = izip(*[s if isinstance(s, timeseries.TempSeries) else repeat(Interpreter.eval(s)) 
                   for s in series])
 
     functions = [Interpreter.eval(apply(type(expr), arg)) for arg in args]
