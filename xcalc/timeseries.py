@@ -1,6 +1,8 @@
+import xml.etree.ElementTree as ET
 from dolfin import Function
 from utils import space_of
 import numpy as np
+import os
 
 
 class TempSeries(Function):
@@ -57,6 +59,27 @@ def common_interval(series):
         interval = interval_
     return interval
 
+
+def PVDTempSeries(path, V, first=0, last=None):
+    '''Read in the temp series of functions in V from PVD file'''
+    _, ext = os.path.splitext(path)
+    assert ext == '.pvd'
+
+    tree = ET.parse(path)
+    collection = list(tree.getroot())[0]
+    # Read in paths/timestamps for VTUs. NOTE: as thus is supposed to be serial 
+    # assert part 0
+    vtus = []
+    for dataset in collection:
+        assert dataset.attrib['part'] == '0'
+        vtus.append((dataset.attrib['file'], float(dataset.attrib['timestep'])))
+    
+    vtus = vtus[slice(first, last, None)]
+    # path.vtu -> function
+    ft_pairs = [(read_vtu_function(path, V), t) for path, t in vtus]
+
+    return TempSeries(ft_pairs)
+    
 # -----------------------------------------------------------------------------
 
 if __name__ == '__main__':
@@ -75,3 +98,10 @@ if __name__ == '__main__':
         print f
 
     print type(c[0:1])
+
+    # ---
+
+    mesh = UnitSquareMesh(64, 64)
+    V = FunctionSpace(mesh, 'CG', 1)
+
+    PVDTempSeries('pod_test.pvd', V)
