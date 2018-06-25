@@ -128,5 +128,3 @@ def numpy_op_foo(args, op, shape_res):
     # NOTE: make_function so that there is only one place (hopefully)
     # where parallelism needs to be addressed
     return make_function(V_res, coefs_res)
-
-
