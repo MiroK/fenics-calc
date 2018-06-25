@@ -8,6 +8,8 @@ before_install:
  - sudo add-apt-repository ppa:fenics-packages/fenics -y
  - sudo apt-get update -q
  - sudo apt-get install --no-install-recommends fenics -y
+ # H5
+ - pip install h5py
  
 install: python setup.py install --user
 
