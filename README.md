@@ -33,8 +33,10 @@ mean = Mean(series)  # Not a lazy node!
 ## What works and what does not
 At the moment the interpreter supports most commonly used nodes in UFL except for
 - differentiation nodes, e.g. `grad` (hence algebraic expressions)
-- FEM specific nodes such as `FacetNormal`, `jump`, `avg` and so on
-Nodes for `ComponentTensor` are only partially supported. Currently MPI support is missing.
+- FEM specific nodes such as `FacetNormal`, `jump`, `avg` and so on 
+- nodes for `ComponentTensor` are only partially supported. 
+
+Currently MPI support is missing.
 
 ## FEniCS compatibility
 This package is CI tested against FEniCS packages for `ubuntu 16.04 LTS` [![Build Status](https://travis-ci.org/MiroK/fenics-calc.svg?branch=master)](https://travis-ci.org/MiroK/ulfy)
