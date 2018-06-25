@@ -9,7 +9,7 @@ before_install:
  - sudo apt-get update -q
  - sudo apt-get install --no-install-recommends fenics -y
  # H5
- - pip install h5py
+ - pip install h5py --user
  
 install: python setup.py install --user
 
