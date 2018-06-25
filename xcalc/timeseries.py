@@ -54,8 +54,8 @@ def common_interval(series):
                              and 
                              V.ufl_element() == V_.ufl_element())
 
-        interval_ = s.times
-        assert not interval or np.linalg.norm(interval - interval_) < 1E-14
+        interval_ = np.array(s.times)
+        assert not len(interval) or np.linalg.norm(interval - interval_) < 1E-14
 
         V = V_
         interval = interval_

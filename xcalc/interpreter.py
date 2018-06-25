@@ -156,7 +156,7 @@ def series_rule(expr):
     # Make first sure that the series are compatible in the sense
     # of having same f and time interval
     times = timeseries.common_interval(list(traverse_unique_terminals(expr)))
-    assert times
+    assert len(times)
 
     series = map(Interpreter.eval, expr.ufl_operands)
 

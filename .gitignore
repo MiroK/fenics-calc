@@ -7,4 +7,5 @@
 *.xdmf
 *.h5
 
+build/
 
