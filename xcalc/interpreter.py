@@ -136,8 +136,10 @@ def indexed_rule(expr):
     # node and these would currently not be supported
     if isinstance(expr, ufl.tensors.ComponentTensor):
         expr = expr.ufl_operands[0]
-
+        
+    assert isinstance(expr, ufl.indexed.Indexed)
     f, index = expr.ufl_operands
+
     # What to index
     f = Interpreter.eval(f)
     # How to index 

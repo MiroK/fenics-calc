@@ -84,33 +84,3 @@ def RMS(series):
     x.sqrtabs()
 
     return rms
-    
-# ------------------------------------------------------------------------------
-
-if __name__ == '__main__':
-    from dolfin import UnitSquareMesh, TensorFunctionSpace, Function, interpolate
-    from dolfin import FunctionSpace 
-    import timeseries
-
-    A = np.array([[1, -2], [-3, 1]])
-
-    mesh = UnitSquareMesh(10, 10)
-    V = TensorFunctionSpace(mesh, 'DG', 0)
-    f = interpolate(Constant(A), V)
-
-    print Eigw(f+f)(0.5, 0.5)    
-    print np.linalg.eigvals(A+A)
-
-    g = Eigv(f+f)
-    print g(0.5, 0.5)    
-    print np.linalg.eig(A+A)[1].T
-
-    V = FunctionSpace(mesh, 'CG', 1)
-    a0 = (interpolate(Constant(1), V), 0)
-    a1 = (interpolate(Constant(2), V), 1)
-    series = timeseries.TempSeries([a0, a1])
-
-    x = Eval(2*series + 3*series)
-
-    print Mean(x)(0.5, 0.5)
-    print RMS(series)(0.5, 0.5)
