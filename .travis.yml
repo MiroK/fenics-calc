@@ -1,0 +1,14 @@
+dist: xenial
+
+language: generic
+
+before_install:
+ # FEniCS
+ - sudo apt-get install software-properties-common -y
+ - sudo add-apt-repository ppa:fenics-packages/fenics -y
+ - sudo apt-get update -q
+ - sudo apt-get install --no-install-recommends fenics -y
+ 
+install: python setup.py install --user
+
+script: python -m unittest discover test
