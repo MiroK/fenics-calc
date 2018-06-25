@@ -203,34 +203,38 @@ if __name__ == '__main__':
     print assemble(inner(me-true, me-true)*dx)
 
     # -----
+    T = TensorFunctionSpace(mesh, 'CG', 1)
+    V = FunctionSpace(mesh, 'CG', 1)
+    A = interpolate(Expression((('x[0]', 'x[1]'),
+                                ('2*x[0]+x[1]', 'x[0]+3*x[1]')), degree=1), T)
 
-    V = FunctionSpace(mesh, 'DG', 0)
-
-    expr = tr(sym(u) + skew(u))
-
+    expr = tr(sym(A) + skew(A))
     me = Eval(expr)
-    true = interpolate(Constant(3), V)
+
+    print '>>>', me(0.5, 0.5)
+    
+    true = interpolate(Expression('2*x[0]+3*x[1]', degree=1), V)
     print assemble(inner(me-true, me-true)*dx(domain=mesh))
     
     # -----
 
-    expr = sym(u)[1, 1]
-    me = Eval(expr)
-    true = interpolate(Constant(3), V)
-    print assemble(inner(me-true, me-true)*dx(domain=mesh))
+    # expr = sym(u)[1, 1]
+    # me = Eval(expr)
+    # true = interpolate(Constant(3), V)
+    # print assemble(inner(me-true, me-true)*dx(domain=mesh))
 
-    # -----
+    # # -----
 
-    expr = sym(u)[:, 1]
-    me = Eval(expr)
-    true = interpolate(Constant((1.5, 3)), VectorFunctionSpace(mesh, 'DG', 0))
-    print assemble(inner(me-true, me-true)*dx(domain=mesh))
+    # expr = sym(u)[:, 1]
+    # me = Eval(expr)
+    # true = interpolate(Constant((1.5, 3)), VectorFunctionSpace(mesh, 'DG', 0))
+    # print assemble(inner(me-true, me-true)*dx(domain=mesh))
 
-    # ------ 
-    a0 = (interpolate(Constant(1), V), 0)
-    a1 = (interpolate(Constant(2), V), 1)
-    series = timeseries.TempSeries([a0, a1])
+    # # ------ 
+    # a0 = (interpolate(Constant(1), V), 0)
+    # a1 = (interpolate(Constant(2), V), 1)
+    # series = timeseries.TempSeries([a0, a1])
 
-    x = Eval(2*series + 3*series)
-    print assemble(inner(Constant(5)-x[0], Constant(5)-x[0])*dx(domain=mesh))
-    print assemble(inner(Constant(10)-x[1], Constant(10)-x[1])*dx(domain=mesh))
+    # x = Eval(2*series + 3*series)
+    # print assemble(inner(Constant(5)-x[0], Constant(5)-x[0])*dx(domain=mesh))
+    # print assemble(inner(Constant(10)-x[1], Constant(10)-x[1])*dx(domain=mesh))
