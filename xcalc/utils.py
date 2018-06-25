@@ -84,19 +84,6 @@ def make_space(V, shape, mesh):
     return FunctionSpace(mesh, elm)
 
 
-def flat_index(indices, shape):
-    '''(1, 2) for (3, 3) is 1*3 + 2'''
-    assert len(indices) == len(shape)
-
-    i0, indices = indices[0], indices[1:]
-    s0, shape = shape[0], shape[1:]
-
-    if not indices:
-        return i0
-    else:
-        return i0*s0 + flat_index(indices, shape)
-
-
 def numpy_op_foo(args, op, shape_res):
     '''Construct function with shape_res ufl_shape by applying op to args'''
     # Do we have V x V x ... spaces?
@@ -116,9 +103,9 @@ def numpy_op_foo(args, op, shape_res):
 
         # Get values for op by reshaping
         if shape:
-            get = (arg_coefs[index].reshape(shape) for index in indices)
+            get = imap(lambda i, c=arg_coefs, s=shape: c[i].reshape(s), indices)
         else:
-            get = (arg_coefs[index] for index in indices)
+            get = imap(lambda i, c=arg_coefs: c[i], indices)
 
         get_args.append(get)
     # Now all the arguments can be iterated to gether by

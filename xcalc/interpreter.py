@@ -122,7 +122,7 @@ def numpy_reshaped(expr, op):
 
     # Exception to the rules are some ops with scalar args
     if isinstance(expr, (ufl.tensoralgebra.Inner, ufl.tensoralgebra.Dot)):
-        if all(a.ufl_shape == () for arg in args):
+        if all(arg.ufl_shape == () for arg in args):
             return Interpreter.eval(args[0]*args[1])
 
     # Construct by numpy with op applied args of expr and reshaping as shape_res
