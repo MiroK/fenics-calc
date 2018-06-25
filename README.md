@@ -1,4 +1,4 @@
-# fenics-cacl
+# fenics-calc
 This module provides a simple lazy evaluator of algebraic expressions over FEniCS functions. Expressions are defined in the `UFL` language. They can be evaluated provided that the function spaces of each `Function` type arguments are of the tensor product form `V x V ... x V`. The expression then results in a `Function` in some appropriate tensor product space with `V`. In general coefficients of the function for expression `(op u v)` are computed as `(op U V)` where `U, V` are coeffcient vectors of the arguments. This approach means that the result is exact iff `op` is linear; otherwise there is an interpolation error.
 
 ````python
