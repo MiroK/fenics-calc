@@ -40,3 +40,6 @@ Currently MPI support is missing.
 
 ## FEniCS compatibility
 This package is CI tested against FEniCS packages for `ubuntu 16.04 LTS` [![Build Status](https://travis-ci.org/MiroK/fenics-calc.svg?branch=master)](https://travis-ci.org/MiroK/ulfy)
+
+## Dependencies and installation
+In addition to FEniCS stack `h5py` is needed. After that `python setup.py install --user` (or variants) is how to install this module 

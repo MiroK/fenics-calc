@@ -2,12 +2,16 @@
 # these ARE NOT GENERAL PURPOSE READEDERS
 
 
-from dolfin import Function, dof_to_vertex_map
+from dolfin import Function, dof_to_vertex_map, warning
 import xml.etree.ElementTree as ET
 from itertools import dropwhile
 from mpi4py import MPI
 import numpy as np
-import h5py
+
+try:
+    import h5py
+except ImportError:
+    warning('H5Py missing')
 
 
 assert MPI.COMM_WORLD.size == 1, 'No parallel (for your own good)'

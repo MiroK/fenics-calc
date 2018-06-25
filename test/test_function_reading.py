@@ -3,7 +3,6 @@ from dolfin import *
 import numpy as np
 import unittest
 
-
 def error(true, me):
     mesh = me.function_space().mesh()
     return sqrt(abs(assemble(inner(me - true, me - true)*dx(domain=mesh))))
@@ -11,6 +10,13 @@ def error(true, me):
 
 class TestCases(unittest.TestCase):
     '''UnitTest for (some of) getting series from VTU/XDMF files'''
+    try:
+        import h5py
+        has_h5py = True
+    except ImportError:
+        has_h5py = False
+
+    @unittest.skipIf(not has_h5py, 'missing h5py')
     def test_xdmf_scalar(self):
         mesh = UnitSquareMesh(3, 3)
         V = FunctionSpace(mesh, 'CG', 1)
@@ -28,7 +34,8 @@ class TestCases(unittest.TestCase):
         series = XDMFTempSeries('xdmf_test.xdmf', V)
         self.assertTrue(error(f0, series[0]) < 1E-14)
         self.assertTrue(error(f1, series[1]) < 1E-14)
-
+        
+    @unittest.skipIf(not has_h5py, 'missing h5py')
     def test_xdmf_vector(self):
         mesh = UnitSquareMesh(3, 3)
         V = VectorFunctionSpace(mesh, 'CG', 1)
@@ -46,7 +53,8 @@ class TestCases(unittest.TestCase):
         series = XDMFTempSeries('xdmf_test.xdmf', V)
         self.assertTrue(error(f0, series[0]) < 1E-14)
         self.assertTrue(error(f1, series[1]) < 1E-14)
-
+        
+    @unittest.skipIf(not has_h5py, 'missing h5py')
     def test_xdmf_tensor(self):
         mesh = UnitSquareMesh(3, 3)
         V = TensorFunctionSpace(mesh, 'CG', 1)
