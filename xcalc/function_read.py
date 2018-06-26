@@ -2,7 +2,7 @@
 # these ARE NOT GENERAL PURPOSE READEDERS
 
 
-from dolfin import Function, dof_to_vertex_map, warning
+from dolfin import Function, dof_to_vertex_map, warning, Mesh, MeshEditor
 import xml.etree.ElementTree as ET
 from itertools import dropwhile
 from mpi4py import MPI
@@ -123,3 +123,63 @@ def read_h5_function(h5_file, times, V):
             
             functions.append(f)
     return functions
+
+
+def read_h5_mesh(path, cell_type):
+    '''Read in mesh from function stored in H5 file'''
+    # Is there a better way? (via HDF5File)
+    h5 = h5py.File(path, 'r')
+
+    mesh_group = h5['Mesh']['0']['mesh']
+    vertices = mesh_group['geometry'].value
+    cells = mesh_group['topology'].value
+
+    return make_mesh(vertices, cells, cell_type)
+
+
+def read_vtu_mesh(path, cell_type):
+    '''Read in mesh from function stored in vtu file'''
+    tree = ET.parse(path)
+    root = tree.getroot()
+    grid = next(iter(root))
+    piece = next(iter(grid))
+
+    points, cells, _ = list(piece)
+    
+    # Parse points
+    point_data = next(iter(points))
+    # Always 3d gdim with this file format
+    gdim = cell_type.geometric_dimension()
+    point_data = np.array(map(float, filter(bool, point_data.text.split(' '))))
+    point_data = point_data.reshape((-1, 3))[:, :gdim]
+
+    # Parse cells
+    cell_data = next(iter(cells))
+    cell_data = np.array(map(int, filter(bool, cell_data.text.split(' '))))
+    cell_data = cell_data.reshape((-1, cell_type.num_vertices()))
+
+    return make_mesh(point_data, cell_data, cell_type)
+
+
+def make_mesh(vertices, cells, cell_type):
+    '''Mesh from data by MeshEditor'''
+    gdim = cell_type.geometric_dimension()
+    assert vertices.shape[1] == gdim
+
+    tdim = cell_type.topological_dimension()
+
+    mesh = Mesh()
+    editor = MeshEditor()
+
+    editor.open(mesh, str(cell_type), tdim, gdim)            
+
+    editor.init_vertices(len(vertices))
+    editor.init_cells(len(cells))
+
+    for vi, x in enumerate(vertices): editor.add_vertex(vi, x)
+
+    for ci, c in enumerate(cells): editor.add_cell(ci, *c)
+    
+    editor.close()
+
+    return mesh

@@ -1,7 +1,8 @@
 import xml.etree.ElementTree as ET
-from function_read import read_h5_function, read_vtu_function
+from function_read import (read_h5_function, read_vtu_function,
+                           read_h5_mesh, read_vtu_mesh)
 from dolfin import (Function, XDMFFile, HDF5File, FunctionSpace,
-                    VectorFunctionSpace, TensorFunctionSpace)
+                    VectorFunctionSpace, TensorFunctionSpace, warning)
 from utils import space_of
 import numpy as np
 import os
@@ -79,12 +80,14 @@ def get_P1_space(V):
     return TensorFunctionSpace(mesh, 'CG', 1)
 
 
-def PVDTempSeries(path, V, first=0, last=None):
-    '''Read in the temp series of functions from PVD file'''
+def PVDTempSeries(path, V=None, first=0, last=None):
+    '''
+    Read in the temp series of functions in V from PVD file. If V is not 
+    a function space then a finite element has to be provided for constructing
+    the space on the recovered mesh.
+    '''
     _, ext = os.path.splitext(path)
     assert ext == '.pvd'
-
-    V = get_P1_space(V)
 
     tree = ET.parse(path)
     collection = list(tree.getroot())[0]
@@ -100,6 +103,16 @@ def PVDTempSeries(path, V, first=0, last=None):
     
     vtus, times = vtus[slice(first, last, None)], times[slice(first, last, None)]
     # path.vtu -> function. But vertex values!!!!
+    
+    if not isinstance(V, FunctionSpace):
+        warning('Setting up P1 space on the recovered mesh')
+
+        cell_type = V.cell()  # Dangerously assuming this is a UFL element
+        mesh = read_vtu_mesh(vtus[0], cell_type)
+        
+        V = FunctionSpace(mesh, V)
+    V = get_P1_space(V)
+
     functions = read_vtu_function(vtus, V)
     ft_pairs = zip(functions, times)
 
@@ -107,13 +120,15 @@ def PVDTempSeries(path, V, first=0, last=None):
 
 
 def XDMFTempSeries(path, V, first=0, last=None):
-    '''Read in the temp series of functions from XDMF file'''
+    '''
+    Read in the temp series of functions in V from XDMF file. If V is not 
+    a function space then a finite element has to be provided for constructing
+    the space on the recovered mesh.
+    '''
     # NOTE: in 2017.2.0 fenics only stores vertex values so CG1 functions
     # is what we go for
     _, ext = os.path.splitext(path)
     assert ext == '.xdmf'
-
-    V = get_P1_space(V)
 
     tree = ET.parse(path)
     domain = list(tree.getroot())[0]
@@ -135,6 +150,16 @@ def XDMFTempSeries(path, V, first=0, last=None):
     times = times[slice(first, last, None)]
     # We read visualization vector from this
     h5_file = os.path.join(os.path.dirname(os.path.abspath(path)), h5_file)
+
+    if not isinstance(V, FunctionSpace):
+        warning('Setting up P1 space on the recovered mesh')
+
+        cell_type = V.cell()  # Dangerously assuming this is a UFL element
+        mesh = read_h5_mesh(h5_file, cell_type)
+        
+        V = FunctionSpace(mesh, V)
+    V = get_P1_space(V)
+
     functions = read_h5_function(h5_file, times, V)
     
     ft_pairs = zip(functions, map(float, times))
