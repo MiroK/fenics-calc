@@ -1,28 +1,22 @@
-from dolfin import inner, dx, assemble, Function, sqrt
+from dolfin import Function
 from types import FunctionType
 import numpy as np
 
 
-def pod(functions, ip='l2'):
+def pod(functions, ip=lambda u, v: u.vector().inner(v.vector()), modal_analysis=[]):
     '''
     Proper orthogonal decomposition
 
     Let there be a collection of Functions and an inner product. POD constructs 
     basis of the space spanned by functions according to the eigendecomposition 
-    of the inner product matrix.
+    of the inner product matrix. Let that basis be {phi_i}. Each fj of functions 
+    can be decomposed in the basis as fj = c^{j}_i phi_i. If j is associated with 
+    time then c^{all j}_i give a temporal evolution of the coef for mode i.
+    With `modal_analysis` a matrix C is returned which corresponds to 
+    coef of i-th modes.
     '''
     # Sanity of inputs
     assert all(isinstance(f, Function) for f in functions)
-
-    # Predefined inner products
-    if ip == 'l2':
-        ip = lambda u, v: u.vector().inner(v.vector())
-
-    elif ip == 'L2':
-        ip = lambda u, v: assemble(inner(u, v)*dx)
-
-    elif ip == 'H1':
-        ip = lambda u, v: assemble(inner(u, v)*dx + inner(grad(u), grad(v))*dx)
 
     assert isinstance(ip, FunctionType) and nargs(ip) == 2
 
@@ -40,16 +34,23 @@ def pod(functions, ip='l2'):
     # Make eigv have rows as vectors
     eigw = np.sqrt(eigw)
     eigv = eigv.T
+    # Reverse so that largest modes come first
+    eigw = eigw[::-1]
+    eigv = eigv[::-1]
+    
     # New basis function are linear combinations with weights given by eigv[i]
-    pod_basis = [linear_combination(c, functions) for c in eigv]
-    # Normalize to unity in the inner product
-    pod_basis = [normalize(f, ip) for f in pod_basis]
+    pod_basis = [linear_combination(c, functions, a) for c, a in zip(eigv, eigw)]
 
-    return eigw, pod_basis
+    if not modal_analysis:
+        return eigw, pod_basis
 
+    C = np.array([[ip(pod_basis[i], fj) for fj in functions] for i in modal_analysis])
 
-def linear_combination(coefs, foos):
-    '''Construct a new function as a linear combinations sum_i coefs[i]*foos[i]'''
+    return eigw, pod_basis, C
+        
+
+def linear_combination(coefs, foos, scale=1):
+    '''Construct a new function as a linear combinations (1./scale)*sum_i coefs[i]*foos[i]'''
     assert all(isinstance(f, Function) for f in foos)
     assert len(coefs) == len(foos)
     assert len(foos)
@@ -59,6 +60,7 @@ def linear_combination(coefs, foos):
     F = f.vector()
     for ci, fi in zip(coefs, foos):
         F.axpy(ci, fi.vector())
+    F /= scale
 
     return f
 
@@ -77,7 +79,7 @@ def nargs(f):
 
 if __name__ == '__main__':
     from dolfin import UnitSquareMesh, Expression, FunctionSpace, interpolate, File
-    from dolfin import XDMFFile
+    from dolfin import XDMFFile, inner, grad, dx, assemble
     from interpreter import Eval
     # Build a monomial basis for x, y, x**2, xy, y**2, ...
 
@@ -93,8 +95,12 @@ if __name__ == '__main__':
         for j in range(deg):
             basis.append(Eval((x**i)*(y**j)))
 
+    ip = lambda u, v: u.vector().inner(v.vector())
+    #ip = lambda u, v: assemble(inner(u, v)*dx)
+    #ip = lambda u, v: assemble(inner(u, v)*dx + inner(grad(u), grad(v))*dx)
+
     # NOTE: skipping 1 bacause Eval of it is not a Function
-    energy, pod_basis = pod(basis[1:])
+    energy, pod_basis = pod(basis[1:], ip=ip)
 
     out = File('pod_test.pvd')
     for i, f in enumerate(pod_basis):
@@ -106,3 +112,8 @@ if __name__ == '__main__':
         for i, f in enumerate(pod_basis):
             f.rename('f', '0')
             out.write(f, float(i))
+
+    for fi in pod_basis:
+        for fj in pod_basis:
+            print ip(fi, fj)
+        print
