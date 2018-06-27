@@ -1,4 +1,5 @@
-from xcalc.utils import space_of, common_sub_element, coefs_of, numpy_op_indices
+from xcalc.utils import (space_of, common_sub_element, coefs_of, numpy_op_indices,
+                         find_first, find_last, clip_index)
 from dolfin import *
 import numpy as np
 import unittest
@@ -79,3 +80,18 @@ class TestCases(unittest.TestCase):
 
         error = np.linalg.norm(me - true)
         self.assertEqual(error, 0)
+
+    def test_clipping(self):
+        a = (-2, -1, 0, 2, 3, 5, 10, 12, 14, 23, 49, 65, 79)
+
+        self.assertTrue(find_first(a, lambda x: x < 0) == 0)
+        self.assertTrue(find_first(a, lambda x: x > 0 and x % 2 == 1) == 4)
+
+        self.assertTrue(find_last(a, lambda x: x == 10) == -7)
+        self.assertTrue(find_last(a, lambda x: x > 0) == -1)
+
+        f, l = 2, 20
+        i = clip_index(a, f, l)
+        self.assertTrue(all(f < x < l for x in a[i]))
+
+        

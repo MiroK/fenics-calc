@@ -1,5 +1,5 @@
 from dolfin import Function, FunctionSpace, VectorElement, TensorElement
-from itertools import imap, izip
+from itertools import imap, izip, dropwhile
 
 
 def make_function(V, coefs):
@@ -128,3 +128,23 @@ def numpy_op_foo(args, op, shape_res):
     # NOTE: make_function so that there is only one place (hopefully)
     # where parallelism needs to be addressed
     return make_function(V_res, coefs_res)
+
+
+def find_first(things, predicate):
+    '''Index of first item in container which satisfies the predicate'''
+    return next(dropwhile(lambda i, s=things: not predicate(s[i]), range(len(things))))
+
+
+def find_last(things, predicate):
+    '''Counting things backward the index of the first item satisfying the predcate'''
+    return -find_first(list(reversed(things)), predicate)-1
+
+
+def clip_index(array, first, last):
+    '''Every item x in array[clip_index(...)] satisfied first < x < last'''
+    assert first < last
+    f = find_first(array, lambda x, f=first: x > f)
+    l = find_last(array, lambda x, l=last: x < l) + 1
+    
+    return slice(f, l)
+

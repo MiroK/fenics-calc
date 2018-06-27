@@ -1,5 +1,5 @@
 from xcalc.interpreter import Eval
-from xcalc.timeseries import TempSeries, stream
+from xcalc.timeseries import TempSeries, stream, clip
 from itertools import izip
 from dolfin import *
 import numpy as np
@@ -98,4 +98,21 @@ class TestCases(unittest.TestCase):
 
         for i, v in enumerate(stream_series):
             self.assertTrue(error(series0[i], v) < 1E-14)
+
+    def test_clip(self):
+        mesh = UnitSquareMesh(2, 2)
+        V = FunctionSpace(mesh, 'DG', 0)
+                
+        series = TempSeries([(interpolate(Constant(1), V), 0),
+                             (interpolate(Constant(2), V), 1),
+                             (interpolate(Constant(3), V), 2),
+                             (interpolate(Constant(4), V), 3)])
+
+        clipped_series = clip(series, 0, 3)
+        self.assertTrue(len(clipped_series)) == 2
+        self.assertEqual(clipped_series.times, (1, 2))
+        self.assertTrue(error(Constant(2), clipped_series[0]) < 1E-14)
+        self.assertTrue(error(Constant(3), clipped_series[1]) < 1E-14)
+        
+
 

@@ -31,15 +31,16 @@ def pod(functions, ip=lambda u, v: u.vector().inner(v.vector()), modal_analysis=
             A[i, j] = A[j, i] = value
 
     eigw, eigv = np.linalg.eigh(A)
+    # NOTE: the matrix should normally be pos def but round of ...
+    eigw = np.abs(eigw)
     # Make eigv have rows as vectors
-    eigw = np.sqrt(eigw)
     eigv = eigv.T
     # Reverse so that largest modes come first
     eigw = eigw[::-1]
     eigv = eigv[::-1]
     
     # New basis function are linear combinations with weights given by eigv[i]
-    pod_basis = [linear_combination(c, functions, a) for c, a in zip(eigv, eigw)]
+    pod_basis = [linear_combination(c, functions, np.sqrt(a)) for c, a in zip(eigv, eigw)]
 
     if not modal_analysis:
         return eigw, pod_basis

@@ -3,8 +3,9 @@ from function_read import (read_h5_function, read_vtu_function,
                            read_h5_mesh, read_vtu_mesh)
 from dolfin import (Function, XDMFFile, HDF5File, FunctionSpace,
                     VectorFunctionSpace, TensorFunctionSpace, warning)
-from utils import space_of
+from utils import space_of, clip_index
 import numpy as np
+import itertools
 import os
 
 
@@ -50,6 +51,15 @@ def stream(series, f):
     for f_ in series.functions:  # Get your own iterator
         f.vector().set_local(f_.vector().get_local())
         yield f
+
+
+def clip(series, t0, t1):
+    '''A view of the series with times such that t0 < times < t1'''
+    index = clip_index(series.times, t0, t1)
+    functions = series.functions[index]
+    times = series.times[index]
+
+    return TempSeries(zip(functions, times))
 
         
 def common_interval(series):
