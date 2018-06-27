@@ -44,6 +44,14 @@ class TempSeries(Function):
             return TempSeries(zip(self.functions[index], self.times[index]))
 
 
+def stream(series, f):
+    '''Pipe series through f'''
+    space_of((series, f))
+    for f_ in series:
+        f.vector().set_local(f_.vector().get_local())
+        yield f
+
+        
 def common_interval(series):
     '''Series are compatible if they over same V and cover same interval'''
     series = filter(lambda s: isinstance(s, TempSeries), series)
