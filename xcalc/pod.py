@@ -38,6 +38,7 @@ def pod(functions, ip='l2'):
 
     eigw, eigv = np.linalg.eigh(A)
     # Make eigv have rows as vectors
+    eigw = np.sqrt(eigw)
     eigv = eigv.T
     # New basis function are linear combinations with weights given by eigv[i]
     pod_basis = [linear_combination(c, functions) for c in eigv]
