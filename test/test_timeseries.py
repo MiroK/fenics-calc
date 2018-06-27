@@ -1,5 +1,6 @@
 from xcalc.interpreter import Eval
-from xcalc.timeseries import TempSeries
+from xcalc.timeseries import TempSeries, stream
+from itertools import izip
 from dolfin import *
 import numpy as np
 import unittest
@@ -80,3 +81,21 @@ class TestCases(unittest.TestCase):
         mag_series = Eval(sqrt(inner(series, series)))
         self.assertTrue(error(Expression('x[0]', degree=1), mag_series[0]) < 1E-14)
         self.assertTrue(error(Expression('x[1]', degree=1), mag_series[1]) < 1E-14)
+
+    def test_steam(self):
+        mesh = UnitSquareMesh(2, 2)
+        V = FunctionSpace(mesh, 'DG', 0)
+                
+        series0 = TempSeries([(interpolate(Constant(1), V), 0),
+                              (interpolate(Constant(2), V), 1)])
+
+        v = Function(V)
+        stream_series = stream(series0, v)
+        # NOTE: it is crucial that this is lazy. With normal zip
+        # v in all the pairse has the last value
+        for vi, v in izip(series0, stream_series):
+            self.assertTrue(error(vi, v) < 1E-14)
+
+        for i, v in enumerate(stream_series):
+            self.assertTrue(error(series0[i], v) < 1E-14)
+

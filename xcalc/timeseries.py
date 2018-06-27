@@ -47,7 +47,7 @@ class TempSeries(Function):
 def stream(series, f):
     '''Pipe series through f'''
     space_of((series, f))
-    for f_ in series:
+    for f_ in series.functions:  # Get your own iterator
         f.vector().set_local(f_.vector().get_local())
         yield f
 
