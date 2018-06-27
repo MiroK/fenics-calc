@@ -1,8 +1,10 @@
 # Some pseudo nodes (function constructors) that could be useful
 # NOTE: unlike ufl nodes these are not lazy, i.e Eval immediately
 from dolfin import Constant, interpolate, Function, as_backend_type
+from collections import deque
 from utils import numpy_op_foo
 from interpreter import Eval
+from timeseries import TempSeries
 import numpy as np
 
 
@@ -84,3 +86,29 @@ def RMS(series):
     x.sqrtabs()
 
     return rms
+
+
+def SlidingWindowFilter(Filter, width, series):
+    '''
+    Collapse a series into a different (shorter) series obtained by applying 
+    filter to the chunks of series of given width.
+    '''
+    assert width > 0
+    t_buffer, f_buffer = deque(maxlen=width), deque(maxlen=width)
+
+    times = series.times
+    functions = series.functions
+
+    filtered_ft_pairs = []
+    for t, f in zip(times, functions):
+        t_buffer.append(t)
+        f_buffer.append(f)
+        # Once the deque is full it will 'overflow' from right so then
+        # we have the right view to filter
+        if len(f_buffer) == width:
+            ff = Filter(TempSeries(zip(list(f_buffer), list(t_buffer))))
+            tf = list(t_buffer)[width/2]  # Okay for odd
+            
+            filtered_ft_pairs.append((ff, tf))
+
+    return TempSeries(filtered_ft_pairs)

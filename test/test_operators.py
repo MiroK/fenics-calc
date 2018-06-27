@@ -1,6 +1,6 @@
 from xcalc.interpreter import Eval
 from xcalc.timeseries import TempSeries
-from xcalc.operators import Eigw, Eigv, Mean, RMS
+from xcalc.operators import Eigw, Eigv, Mean, RMS, SlidingWindowFilter
 from dolfin import *
 import numpy as np
 import unittest
@@ -71,4 +71,18 @@ class TestCases(unittest.TestCase):
         f.t = sqrt(4/3.)
         # Due to quadrature error 
         self.assertTrue(error(f, rms) < 1E-4)
+
+    def test_sliding_window(self):
+        mesh = UnitSquareMesh(4, 4)
+        V = FunctionSpace(mesh, 'CG', 1)
+
+        series = TempSeries([(interpolate(Constant(1), V), 0),
+                             (interpolate(Constant(2), V), 1),
+                             (interpolate(Constant(3), V), 2),
+                             (interpolate(Constant(4), V), 3)])
+
+        f_series = SlidingWindowFilter(Mean, 2, series)
+
+        assert len(f_series) == 3
+        assert f_series.times == (1, 2, 3)
 
