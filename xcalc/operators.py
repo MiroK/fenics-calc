@@ -47,6 +47,7 @@ def Eigv(expr):
                         op=lambda A: np.linalg.eig(A)[1].T,
                         shape_res=(n, m))
 
+
 def Mean(series):
     '''A mean of the series is 1/(T - t0)\int_{t0}^{t1}f(t)dt'''
     # Apply simpsons rule
