@@ -96,29 +96,30 @@ def STD(series):
     # first, compute the mean
     mean = Mean(series)
 
-    # get the field of the mean
+    # get the square of the field of the mean
     mean_vector = mean.vector()
-    mv = as_backend_type(mean_vector).vec()
+    mvs = as_backend_type(mean_vector).vec()
+    # the mean squared, to be used for computing the RMS
+    mvs.pointwiseMult(mvs, mvs)
 
     # now, compute the STD
     # for this, follow the example of RMS
     std = Function(series.V)
     # NOTE: for efficiency we stay away from Interpreter and all is in PETSc layer
-    x = as_backend_type(std.vector()).vec()  # PETSc.Vec
-    y = x.copy()  # Stores fi**2
+    x = as_backend_type(std.vector()).vec()  # PETSc.Vec, stores the final output
+    y = x.copy()  # Stores the current working field
     # Integrate
     dts = np.diff(series.times)
     f_vectors = [as_backend_type(f.vector()).vec() for f in series.functions]
     for dt, (f0, f1) in zip(dts, zip(f_vectors[:-1], f_vectors[1:])):
         y.pointwiseMult(f0, f0)  # y = f0**2
-        x.axpy(dt/2., y)  # (f0**2+f1**2)*dt/2
+        x.axpy(dt / 2., y)  # x += dt / 2 * y
 
         y.pointwiseMult(f1, f1)  # y = f1**2
-        x.axpy(dt/2., y)
+        x.axpy(dt / 2., y)  # x += dt / 2 * y
 
-        # note: inefficient: does again and again
-        y.pointwiseMult(mv, mv)  # y = mean**2
-        x.axpy(-dt, y)
+        x.axpy(-dt, mvs)  # x += -dt * mvs  NOTE: no factor 2, as adding 2 dt / 2 to compensate
+        
     # Time interval scaling
     x /= dts.sum()
     # sqrt
