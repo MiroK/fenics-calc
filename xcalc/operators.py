@@ -14,7 +14,7 @@ def ConstantFunction(V, value):
         return ConstantFunction(V, Constant(value))
     # Shape consistency
     assert V.ufl_element().value_shape() == value.ufl_shape
-    
+
     return interpolate(value, V)
 
 
@@ -41,7 +41,7 @@ def Eigv(expr):
     '''
     n, m = expr.ufl_shape
     assert n == m, 'Square matrices only (or implement SVD)'
-    
+
     f = Eval(expr)
     return numpy_op_foo(args=(f, ),
                         op=lambda A: np.linalg.eig(A)[1].T,
@@ -89,9 +89,48 @@ def RMS(series):
     return rms
 
 
+def STD(series):
+    """std of a series. NOTE: this is a sort of copy-paste coding of RMS; maybe rather
+    put in RMS with a STD flag?"""
+
+    # first, compute the mean
+    mean = Mean(series)
+
+    # get the square of the field of the mean
+    mean_vector = mean.vector()
+    mvs = as_backend_type(mean_vector).vec()
+    # the mean squared, to be used for computing the RMS
+    mvs.pointwiseMult(mvs, mvs)
+
+    # now, compute the STD
+    # for this, follow the example of RMS
+    std = Function(series.V)
+    # NOTE: for efficiency we stay away from Interpreter and all is in PETSc layer
+    x = as_backend_type(std.vector()).vec()  # PETSc.Vec, stores the final output
+    y = x.copy()  # Stores the current working field
+    # Integrate
+    dts = np.diff(series.times)
+    f_vectors = [as_backend_type(f.vector()).vec() for f in series.functions]
+    for dt, (f0, f1) in zip(dts, zip(f_vectors[:-1], f_vectors[1:])):
+        y.pointwiseMult(f0, f0)  # y = f0**2
+        x.axpy(dt / 2., y)  # x += dt / 2 * y
+
+        y.pointwiseMult(f1, f1)  # y = f1**2
+        x.axpy(dt / 2., y)  # x += dt / 2 * y
+
+        x.axpy(-dt, mvs)  # x += -dt * mvs  NOTE: no factor 2, as adding 2 dt / 2 to compensate
+        
+    # Time interval scaling
+    x /= dts.sum()
+    # sqrt
+    x.sqrtabs()
+
+    return std
+
+
 def SlidingWindowFilter(Filter, width, series):
     '''
-    Collapse a series into a different (shorter) series obtained by applying 
+    Collapse a series into a different (shorter) series obtained by applying
     filter to the chunks of series of given width.
     '''
     assert width > 0
@@ -109,7 +148,7 @@ def SlidingWindowFilter(Filter, width, series):
         if len(f_buffer) == width:
             ff = Filter(TempSeries(zip(list(f_buffer), list(t_buffer))))
             tf = list(t_buffer)[width/2]  # Okay for odd
-            
+
             filtered_ft_pairs.append((ff, tf))
 
     return TempSeries(filtered_ft_pairs)
