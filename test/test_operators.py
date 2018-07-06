@@ -1,6 +1,6 @@
 from xcalc.interpreter import Eval
 from xcalc.timeseries import TempSeries
-from xcalc.operators import Eigw, Eigv, Mean, RMS, SlidingWindowFilter
+from xcalc.operators import Eigw, Eigv, Mean, RMS, SlidingWindowFilter, STD
 from dolfin import *
 import numpy as np
 import unittest
@@ -85,4 +85,26 @@ class TestCases(unittest.TestCase):
 
         assert len(f_series) == 3
         assert f_series.times == (1, 2, 3)
+
+    def test_std(self):
+        mesh = UnitSquareMesh(4, 4)
+        V = FunctionSpace(mesh, 'CG', 1)
+        f = Expression('(x[0]+x[1])*t', t=0, degree=1)
+        
+        ft_pairs = []
+        for t in np.linspace(0, 2, 80):
+            f.t = t
+            v = interpolate(f, V)
+            ft_pairs.append((v, t))
+
+        series = TempSeries(ft_pairs)
+
+        std = STD(series)  # Efficiently in PETSc
+        # From definition
+        # FIXME: this would be much nicer with
+        # Eval(sqrt(Mean(series**2) - Mean(series)**2))
+        std_ = Eval(sqrt(Mean(Eval(series**2)) - Eval(Mean(series)**2)))
+
+        self.assertTrue(error(std_, std) < 1E-14)
+
 

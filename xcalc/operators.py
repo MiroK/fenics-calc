@@ -90,9 +90,7 @@ def RMS(series):
 
 
 def STD(series):
-    """std of a series. NOTE: this is a sort of copy-paste coding of RMS; maybe rather
-    put in RMS with a STD flag?"""
-
+    '''STD of series.'''
     # first, compute the mean
     mean = Mean(series)
 
