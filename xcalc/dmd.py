@@ -1,6 +1,3 @@
-from pydmd import DMD
-# https://github.com/mathLab/PyDMD
-
 from dolfin import Function
 from collections import namedtuple
 import numpy as np
@@ -9,30 +6,29 @@ import numpy as np
 ComplexFunction = namedtuple('ComplexFunction', ('real', 'imag'))
 
 
-def dmd(functions, dt=1, modal_analysis=[]):
+def dmd(functions, dmd_object, dt=1, modal_analysis=[]):
     '''
     Dynamic mode decomposition:
       J. Fluid Mech. (2010), vol. 656, pp. 5-28  (idea)
       On dynamic mode decomposition: theory and application; Tu, J. H et al. (implement)
       
-    DMD of (ordered, dt-equispaced) snapshots.
+    DMD of (ordered, dt-equispaced) snapshots. dmd_object is the configured DMDBase instance.
     '''
     assert all(isinstance(f, Function) for f in functions)
-
+    # Wrap for pydmd
     X = np.array([f.vector().get_local() for f in functions]).T
     
     # Rely on pydmd
-    dmd_ = DMD(svd_rank=0, exact=True)    
-    dmd_.fit(X)
-    dmd_.original_time['dt'] = dt
+    dmd_object.fit(X)
+    dmd_object.original_time['dt'] = dt
     
     V = functions[0].function_space()
-    eigs = dmd_.eigs
+    eigs = dmd_object.eigs
         
     modes = []
     # NOTE: unlike with pod where the basis was only real here the
     # modes might have complex components so ...
-    for x in dmd_.modes.T:
+    for x in dmd_object.modes.T:
         f_real = Function(V)
         f_real.vector().set_local(x.real)
             
@@ -42,7 +38,7 @@ def dmd(functions, dt=1, modal_analysis=[]):
         modes.append(ComplexFunction(f_real, f_imag))
 
     if len(modal_analysis):
-        return eigs, modes, dmd_.dynamics[modal_analysis]
+        return eigs, modes, dmd_object.dynamics[modal_analysis]
 
     return eigs, modes
 
@@ -54,23 +50,29 @@ if __name__ == '__main__':
     from interpreter import Eval
     # Build a monomial basis for x, y, x**2, xy, y**2, ...
 
+    try:
+        from pydmd import DMD
+        # https://github.com/mathLab/PyDMD
+    except ImportError:
+        from xcalc.dmdbase import DMD
+
     deg = 4
 
     mesh = UnitSquareMesh(3, 3)
-    V = FunctionSpace(mesh, 'CG', 3)
-    x = interpolate(Expression('x[0]', degree=1), V)
-    y = interpolate(Expression('x[1]', degree=1), V)
+    V = FunctionSpace(mesh, 'CG', 1)
+    f = interpolate(Expression('x[0]+x[1]', degree=1), V).vector().get_local()
+    A = np.diag(np.random.rand(V.dim()))
 
     basis = []
     for i in range(deg):
         for j in range(deg):
-            basis.append(Eval((x**i)*(y**j)))
-
+            f = A.dot(f)
+            Af = Function(V); Af.vector().set_local(f)
+            basis.append(Af)
+            
     # NOTE: skipping 1 bacause Eval of it is not a Function
-    energy, pod_basis = dmd(basis[1:])
+    dmd_ = DMD(svd_rank=-1, exact=False)
+    energy, pod_basis = dmd(basis[1:], dmd_)
 
-    out = File('mmd_test.pvd')
-    for i, f in enumerate(pod_basis):
-        fr = f.real
-        fr.rename('f', '0')
-        out << (fr, float(i))
+    print np.linalg.norm(dmd_.snapshots - dmd_.reconstructed_data.real)
+    print len(pod_basis), len(basis[1:])

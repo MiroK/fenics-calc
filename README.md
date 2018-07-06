@@ -42,4 +42,4 @@ Currently MPI support is missing.
 This package is CI tested against FEniCS packages for `ubuntu 16.04 LTS` [![Build Status](https://travis-ci.org/MiroK/fenics-calc.svg?branch=master)](https://travis-ci.org/MiroK/fenics-calc)
 
 ## Dependencies and installation
-In addition to FEniCS stack `h5py` is needed if one wants to use `XDMFTempSeries`. After that, `python setup.py install --user` (or variants) is how to install this module. 
+In addition to FEniCS stack `h5py` is needed if one wants to use `XDMFTempSeries`. Dynamic mode decomposition of series relies on [PyDMD](https://github.com/mathLab/PyDMD) module. After that, `python setup.py install --user` (or variants) is how to install this module. 
