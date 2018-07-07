@@ -1,5 +1,6 @@
 from ufl.corealg.traversal import traverse_unique_terminals
-from dolfin import Function, VectorFunctionSpace, interpolate, Expression
+from dolfin import (Function, VectorFunctionSpace, interpolate, Expression,
+                    as_vector, Constant)
 import numpy as np
 import ufl
 
@@ -67,22 +68,21 @@ class Interpreter(object):
     # FIXME: ListTensor(foo, indices=None) <= we have no support for indices
     
     # Other's where Eval works
-    terminal_type = (Function, int, float, timeseries.TempSeries)
-    value_type = (ufl.algebra.ScalarValue, ufl.algebra.IntValue)
-    index_type = (ufl.indexed.Indexed, ufl.tensors.ComponentTensor)
-
-    eval_types = reduce(operator.or_, (set(no_reshape_type.keys()),
-                                       set(reshape_type.keys()),
-                                       set(terminal_type),
-                                       set(value_type),
-                                       set(index_type)))
+    terminal_type = (Function, int, float, timeseries.TempSeries) 
+    value_type = (ufl.algebra.ScalarValue, ufl.algebra.IntValue)  
+    index_type = (ufl.indexed.Indexed, )
+    compose_type = (ufl.tensors.ComponentTensor, )
 
     @staticmethod
     def eval(expr):
-        # Terminals/base cases (also TempSeries)
+        # Terminals/base cases (also TempSeries) -> identity
         if isinstance(expr, Interpreter.terminal_type): return expr
 
+        # To number
         if isinstance(expr, Interpreter.value_type): return expr.value()
+
+        # To number
+        if isinstance(expr, Constant): return float(expr)
 
         # Recast spatial coordinate as CG1 functions
         if isinstance(expr, ufl.geometry.SpatialCoordinate):
@@ -107,8 +107,13 @@ class Interpreter(object):
         if expr_type in Interpreter.reshape_type: 
             return numpy_reshaped(expr, op=Interpreter.reshape_type[expr_type])
 
-        # Indexing [] is special as the second argument gives slicing
-        if isinstance(expr, Interpreter.index_type): return indexed_rule(expr)
+        # Define tensor by componenents
+        if isinstance(expr, Interpreter.compose_type):
+            return component_tensor_rule(expr)
+
+        # A indexed by FixedIndex or Index
+        if isinstance(expr, Interpreter.index_type):
+            return indexed_rule(expr)
 
         # No reshaping neeed
         op = Interpreter.no_reshape_type[expr_type]  # Throw if we don't support this
@@ -139,10 +144,6 @@ def numpy_reshaped(expr, op):
 def indexed_rule(expr):
     '''Function representing f[index] so we end up with scalar'''
     shape_res = expr.ufl_shape
-    # FIXME: A[:, 1] is a ComponentTensor. They are other ways to get that 
-    # node and these would currently not be supported
-    if isinstance(expr, ufl.tensors.ComponentTensor):
-        expr = expr.ufl_operands[0]
         
     assert isinstance(expr, ufl.indexed.Indexed)
     f, index = expr.ufl_operands
@@ -184,3 +185,34 @@ def series_rule(expr):
     functions = [Interpreter.eval(apply(type(expr), arg)) for arg in args]
 
     return timeseries.TempSeries(zip(functions, times))
+
+
+def component_tensor_rule(expr):
+    '''Tensors whose components are given by computation of some sort.'''
+    f, free_indices = expr.ufl_operands
+    # Want to build vectors or matrices
+    assert len(free_indices) == 1 or len(free_indices) == 2
+
+    # Simple rules where the eval node is obtained just by substitution
+    if not isinstance(f, ufl.indexsum.IndexSum):
+        # FIXME: can we really only get vectors this way?
+        assert len(free_indices) == 1
+        
+        index = free_indices[0]
+        f = tuple(replace(f, index, FixedIndex(i)) for i in range(expr.ufl_shape[0]))
+
+        return Interpreter.eval(as_vector(f))
+
+    # The idea now is to to build the expression which represents the sum
+    # needed to compute the component. Computing with scalars this way is
+    # not very efficient - FIXME: drop to numpy?
+    assert isinstance(f, ufl.indexsum.IndexSum)
+
+    summand, sum_indices = f.ufl_operands
+    
+    # Let A mat, b vec
+    # Handle A*b, b*A, A*(A*b)
+    # Handla A*A, A*A*A, ... A*A need recursions
+    #
+    #
+    #     assert len(summand.ufl_free_indices) == 1

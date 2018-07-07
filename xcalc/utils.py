@@ -1,5 +1,8 @@
 from dolfin import Function, FunctionSpace, VectorElement, TensorElement
-from itertools import imap, izip, dropwhile
+from itertools import imap, izip, dropwhile, ifilterfalse, ifilter
+
+from ufl.indexed import Index, FixedIndex, MultiIndex
+from ufl.core.terminal import Terminal
 
 
 def make_function(V, coefs):
@@ -129,6 +132,7 @@ def numpy_op_foo(args, op, shape_res):
     # where parallelism needs to be addressed
     return make_function(V_res, coefs_res)
 
+# Utils for series
 
 def find_first(things, predicate):
     '''Index of first item in container which satisfies the predicate'''
@@ -148,3 +152,48 @@ def clip_index(array, first, last):
     
     return slice(f, l)
 
+# UFL utils for substitution of indices
+
+def is_index(expr):
+    return isinstance(expr, (Index, FixedIndex))
+
+
+def traverse_indices(expr):
+    '''Traverse the UFL expression (drilling into indices)'''
+    if expr.ufl_operands:
+        for op in expr.ufl_operands:
+            for e in ifilter(is_index, traverse_indices(op)):
+                yield e
+    # Multiindex has no operands but we want the indices
+    if isinstance(expr, MultiIndex):
+        for i in expr.indices():
+            yield i
+
+    
+def matches(expr, target):
+    '''Compare two indices for equalty'''
+    return expr == target
+
+                                                              
+def contains(expr, target):
+    '''Is the target index contained in the expression?'''
+    # A tarminal target either agrees or is one of the expr terminals
+    if is_index(expr):
+        return expr == target
+    else:
+        return any(matches(target, t) for t in traverse_indices(expr))
+
+    
+def replace(expr, arg, replacement):
+    '''A new expression where argument in the expression is the replacement'''
+    # Do nothing if no way to substitute, i.e. return original
+    if not contains(expr, arg):
+        return expr
+    # Identical 
+    if matches(expr, arg):
+        return replacement
+    # Reconstruct the node with the substituted argument
+    if expr.ufl_operands:
+        return type(expr)(*[replace(op, arg, replacement) for op in expr.ufl_operands])
+    # This has to be MultiIndex
+    return MultiIndex(tuple(replace(op, arg, replacement) for op in expr.indices()))
