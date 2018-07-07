@@ -53,8 +53,8 @@ class TestCases(unittest.TestCase):
 
         # PVDTempSeries('pod_test.pvd', V)
         series = XDMFTempSeries('xdmf_test.xdmf', V)
-        self.assertTrue(error(f0, series[0]) < 1E-14)
-        self.assertTrue(error(f1, series[1]) < 1E-14)
+        self.assertTrue(error(f0, series.getitem(0)) < 1E-14)
+        self.assertTrue(error(f1, series.getitem(1)) < 1E-14)
         
     @unittest.skipIf(not has_h5py, 'missing h5py')
     def test_xdmf_tensor(self):
@@ -72,8 +72,8 @@ class TestCases(unittest.TestCase):
 
         # PVDTempSeries('pod_test.pvd', V)
         series = XDMFTempSeries('xdmf_test.xdmf', V)
-        self.assertTrue(error(f0, series[0]) < 1E-14)
-        self.assertTrue(error(f1, series[1]) < 1E-14)
+        self.assertTrue(error(f0, series.getitem(0)) < 1E-14)
+        self.assertTrue(error(f1, series.getitem(1)) < 1E-14)
 
     @unittest.skipIf(not has_h5py, 'missing h5py')
     def test_xdmf_scalar(self):
@@ -130,8 +130,8 @@ class TestCases(unittest.TestCase):
         out << (f1, 1.)
 
         series = PVDTempSeries('pvd_test.pvd', V)
-        self.assertTrue(error(f0, series[0]) < 1E-14)
-        self.assertTrue(error(f1, series[1]) < 1E-14)
+        self.assertTrue(error(f0, series.getitem(0)) < 1E-14)
+        self.assertTrue(error(f1, series.getitem(1)) < 1E-14)
 
     def test_vtu_vector(self):
         mesh = UnitSquareMesh(3, 3)
@@ -147,8 +147,8 @@ class TestCases(unittest.TestCase):
         out << (f1, 1.)
 
         series = PVDTempSeries('pvd_test.pvd', V)
-        self.assertTrue(error(f0, series[0]) < 1E-14)
-        self.assertTrue(error(f1, series[1]) < 1E-14)
+        self.assertTrue(error(f0, series.getitem(0)) < 1E-14)
+        self.assertTrue(error(f1, series.getitem(1)) < 1E-14)
 
     def test_vtu_tensor(self):
         mesh = UnitSquareMesh(3, 3)
@@ -167,8 +167,8 @@ class TestCases(unittest.TestCase):
         out << (f1, 1.)
 
         series = PVDTempSeries('pvd_test.pvd', V)
-        self.assertTrue(error(f0, series[0]) < 1E-14)
-        self.assertTrue(error(f1, series[1]) < 1E-14)
+        self.assertTrue(error(f0, series.getitem(0)) < 1E-14)
+        self.assertTrue(error(f1, series.getitem(1)) < 1E-14)
 
     def test_vtu_mesh_recovery(self):
         mesh = UnitSquareMesh(5, 5)
@@ -202,8 +202,8 @@ class TestCases(unittest.TestCase):
         out << (f1, 1.)
 
         series = PVDTempSeries('pvd_test.pvd', V=V.ufl_element())
-        self.assertTrue(error(f0, series[0]) < 1E-14)
-        self.assertTrue(error(f1, series[1]) < 1E-14)
+        self.assertTrue(error(f0, series.getitem(0)) < 1E-14)
+        self.assertTrue(error(f1, series.getitem(1)) < 1E-14)
 
 
 

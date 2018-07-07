@@ -10,20 +10,20 @@ from utils import *
 
 
 def Eval(expr):
-    '''
-    This intepreter translates expr into a function object or a number. Expr is 
-    defined via a subset of UFL language. Letting f, g be functions in V 
-    Eval(op(f, g)) is a function in V with coefs given by (op(coefs(f), coef(g))).
-    '''
+#    '''
+#    This intepreter translates expr into a function object or a number. Expr is 
+#    defined via a subset of UFL language. Letting f, g be functions in V 
+#    Eval(op(f, g)) is a function in V with coefs given by (op(coefs(f), coef(g))).
+#    '''
     return Interpreter.eval(expr)
 
 
 class Interpreter(object):
-    '''
-    This intepreter translates expr into a function object or a number. Expr is 
-    defined via a subset of UFL language. Letting f, g be functions in V 
-    Eval(op(f, g)) is a function in V with coefs given by (op(coefs(f), coef(g))).
-    '''
+#    '''
+#    This intepreter translates expr into a function object or a number. Expr is 
+#    defined via a subset of UFL language. Letting f, g be functions in V 
+#    Eval(op(f, g)) is a function in V with coefs given by (op(coefs(f), coef(g))).
+#    '''
     # Expression which when evaluated end up in the same space as the arguments
     # or require no reshaping of arraysbefore numpy is applied
     no_reshape_type = {
@@ -92,7 +92,6 @@ class Interpreter(object):
         assert len(series) == len(terminals) or len(series) == 0, map(len, (series, terminals))
         # For series, we apply op to functions and make new series
         if series:
-            assert not isinstance(expr, Interpreter.index_type)
             return series_rule(expr)
 
         expr_type = type(expr)
@@ -160,12 +159,20 @@ def series_rule(expr):
     times = timeseries.common_interval(list(traverse_unique_terminals(expr)))
     assert len(times)
 
-    series = map(Interpreter.eval, expr.ufl_operands)
+    series = []
+    # NOTE: fall through on args that Eval cann't handle because we just
+    # need to define a node for the series.
+    for o in expr.ufl_operands:
+        try:
+            eo = Interpreter.eval(o)
+        except KeyError:
+            eo = o
+        series.append(eo)
 
     # We apply the op to functions in the series and construct a new one
-    args = izip(*[s if isinstance(s, timeseries.TempSeries) else repeat(Interpreter.eval(s)) 
+    args = izip(*[s if isinstance(s, timeseries.TempSeries) else repeat(s) 
                   for s in series])
-
+    # Apply gives as the node, eval gives us the function
     functions = [Interpreter.eval(apply(type(expr), arg)) for arg in args]
 
     return timeseries.TempSeries(zip(functions, times))

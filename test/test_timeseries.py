@@ -79,8 +79,8 @@ class TestCases(unittest.TestCase):
                               (interpolate(Expression(('0', 'x[1]'), degree=1), V), 1)])
 
         mag_series = Eval(sqrt(inner(series, series)))
-        self.assertTrue(error(Expression('x[0]', degree=1), mag_series[0]) < 1E-14)
-        self.assertTrue(error(Expression('x[1]', degree=1), mag_series[1]) < 1E-14)
+        self.assertTrue(error(Expression('x[0]', degree=1), mag_series.getitem(0)) < 1E-14)
+        self.assertTrue(error(Expression('x[1]', degree=1), mag_series.getitem(1)) < 1E-14)
 
     def test_steam(self):
         mesh = UnitSquareMesh(2, 2)
@@ -97,7 +97,7 @@ class TestCases(unittest.TestCase):
             self.assertTrue(error(vi, v) < 1E-14)
 
         for i, v in enumerate(stream_series):
-            self.assertTrue(error(series0[i], v) < 1E-14)
+            self.assertTrue(error(series0.getitem(i), v) < 1E-14)
 
     def test_clip(self):
         mesh = UnitSquareMesh(2, 2)
@@ -111,8 +111,25 @@ class TestCases(unittest.TestCase):
         clipped_series = clip(series, 0, 3)
         self.assertTrue(len(clipped_series)) == 2
         self.assertEqual(clipped_series.times, (1, 2))
-        self.assertTrue(error(Constant(2), clipped_series[0]) < 1E-14)
-        self.assertTrue(error(Constant(3), clipped_series[1]) < 1E-14)
+        self.assertTrue(error(Constant(2), clipped_series.getitem(0)) < 1E-14)
+        self.assertTrue(error(Constant(3), clipped_series.getitem(1)) < 1E-14)
+
+    def test_get(self):
+        mesh = UnitSquareMesh(2, 2)
+        V = VectorFunctionSpace(mesh, 'CG', 1)
+                
+        series = TempSeries([(interpolate(Expression(('x[0]', '0'), degree=1), V), 0),
+                              (interpolate(Expression(('0', 'x[1]'), degree=1), V), 1)])
+
+        mag_series = Eval(series[0])  # series of first componentsts
+        self.assertTrue(error(Expression('x[0]', degree=1), mag_series.getitem(0)) < 1E-14)
+        self.assertTrue(error(Expression('0', degree=1), mag_series.getitem(1)) < 1E-14)
+
+        mag_series = Eval(series[1])  # series of secon componentsts
+        self.assertTrue(error(Expression('0', degree=1), mag_series.getitem(0)) < 1E-14)
+        self.assertTrue(error(Expression('x[1]', degree=1), mag_series.getitem(1)) < 1E-14)
+
+
         
 
 

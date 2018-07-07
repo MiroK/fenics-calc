@@ -36,14 +36,12 @@ class TempSeries(Function):
     def __len__(self):
         return len(self.functions)
 
-    def __getitem__(self, index):
-        # NOTE: by having this [] is access to functions not a new time series
-        # of the components
+    def getitem(self, index):
+        '''Access elements of the time series'''
         if isinstance(index, int):
             return self.functions[index]
         else:
             return TempSeries(zip(self.functions[index], self.times[index]))
-
 
 def stream(series, f):
     '''Pipe series through f'''

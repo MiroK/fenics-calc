@@ -15,7 +15,7 @@ me = Eval(expr)  # Function in VectorFunctionSpace(mesh, 'CG', 1)
                  # Exact due to linearity
 ````
 
-Functions can be grouped into `TempSeries` (avoiding name collision with FEniCS's native `TimeSeries`). Same algebraic operations over these objects are supported as with normal functions with the exception of `__getitem__` which is now understood as accessing the individual functions in the series. `TempSeries` are collapsed into functions by time-averaging operations such as mean
+Functions can be grouped into `TempSeries` (avoiding name collision with FEniCS's native `TimeSeries`). Same algebraic operations over these objects are supported as with normal functions. `TempSeries` are collapsed into functions by time-averaging operations such as mean
 
 ````python
 from dolfin import *
