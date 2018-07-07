@@ -179,3 +179,23 @@ class TestCases(unittest.TestCase):
 
         e = error(true, me)
         self.assertTrue(e < 1E-14)
+        
+    def test_sanity11(self):
+        mesh = UnitSquareMesh(5, 5)
+
+        true = SpatialCoordinate(mesh)
+        me = Eval(true)
+        
+        e = error(true, me)
+        self.assertTrue(e < 1E-14)
+
+
+    def test_sanity12(self):
+        mesh = UnitSquareMesh(5, 5)
+
+        x, y = SpatialCoordinate(mesh)
+        true = as_vector((x+y, x-y))
+        me = Eval(true)
+        
+        e = error(true, me)
+        self.assertTrue(e < 1E-14)

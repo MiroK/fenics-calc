@@ -1,5 +1,5 @@
 from ufl.corealg.traversal import traverse_unique_terminals
-from dolfin import Function
+from dolfin import Function, VectorFunctionSpace, interpolate, Expression
 import numpy as np
 import ufl
 
@@ -83,6 +83,12 @@ class Interpreter(object):
         if isinstance(expr, Interpreter.terminal_type): return expr
 
         if isinstance(expr, Interpreter.value_type): return expr.value()
+
+        # Recast spatial coordinate as CG1 functions
+        if isinstance(expr, ufl.geometry.SpatialCoordinate):
+            mesh = expr.ufl_domain().ufl_cargo()
+            r = Expression(('x[0]', 'x[1]', 'x[2]')[:mesh.geometry().dim()], degree=1)
+            return interpolate(r, VectorFunctionSpace(mesh, 'CG', 1))
         
         # Okay: now we have expr with arguments. If this expression involves 
         # times series then all the non number arguments should be compatible 
