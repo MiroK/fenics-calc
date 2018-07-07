@@ -61,8 +61,10 @@ class Interpreter(object):
         ufl.tensoralgebra.Dot: np.dot,
         ufl.tensoralgebra.Cross: np.cross,
         ufl.tensoralgebra.Outer: np.outer,
-        ufl.tensoralgebra.Inner: np.inner
+        ufl.tensoralgebra.Inner: np.inner,
+        ufl.tensors.ListTensor: lambda *x: np.hstack(x)
     }
+    # FIXME: ListTensor(foo, indices=None) <= we have no support for indices
     
     # Other's where Eval works
     terminal_type = (Function, int, float, timeseries.TempSeries)

@@ -139,7 +139,6 @@ class TestCases(unittest.TestCase):
         e = error(true, me)
         self.assertTrue(e < 1E-14)
 
-
     def test_sanity8(self):
         mesh = UnitSquareMesh(5, 5)
     
@@ -153,8 +152,30 @@ class TestCases(unittest.TestCase):
         e = error(true, me)
         self.assertTrue(e < 1E-14)
 
+    def test_sanity9(self):
+        mesh = UnitSquareMesh(5, 5)
+        V = FunctionSpace(mesh, 'CG', 1)
 
+        a0 = interpolate(Expression('x[0]', degree=1), V)
+        a1 = interpolate(Expression('x[1]', degree=1), V)
 
+        me = Eval(as_vector((a0, a1)))
 
+        x, y = SpatialCoordinate(mesh)
+        true = as_vector((x, y))
 
+        e = error(true, me)
+        self.assertTrue(e < 1E-14)
 
+    def test_sanity10(self):
+        mesh = UnitSquareMesh(5, 5)
+        V = FunctionSpace(mesh, 'CG', 1)
+
+        a0 = interpolate(Expression('x[0]', degree=1), V)
+        a1 = interpolate(Expression('x[1]', degree=1), V)
+
+        true = as_vector((as_vector((a0, a1)), as_vector((-a0, -a1))))
+        me = Eval(true)
+
+        e = error(true, me)
+        self.assertTrue(e < 1E-14)
