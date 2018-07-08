@@ -199,3 +199,95 @@ class TestCases(unittest.TestCase):
         
         e = error(true, me)
         self.assertTrue(e < 1E-14)
+
+    def test_comp_tensor_row_slice(self):
+        mesh = UnitSquareMesh(4, 4)
+        x, y = SpatialCoordinate(mesh)
+        
+        A = as_matrix(((x, 2*y), (3*y, 4*x)))
+
+        true = A[1, :]
+        me = Eval(true)
+        
+        e = error(true, me)
+        self.assertTrue(e < 1E-14)
+
+    def test_comp_tensor_col_slice(self):
+        mesh = UnitSquareMesh(4, 4)
+        x, y = SpatialCoordinate(mesh)
+        
+        A = as_matrix(((x, 2*y), (3*y, 4*x)))
+ 
+        true = A[:, 0]
+        me = Eval(true)
+        
+        e = error(true, me)
+        self.assertTrue(e < 1E-14)
+
+    def test_comp_tensor_num_vec(self):
+        mesh = UnitSquareMesh(4, 4)
+        r = SpatialCoordinate(mesh)
+        
+        true = Constant(2)*r
+        me = Eval(true)
+        
+        e = error(true, me)
+        self.assertTrue(e < 1E-14)
+
+    def test_comp_tensor_mat_vec(self):
+        mesh = UnitSquareMesh(4, 4)
+        x, y = SpatialCoordinate(mesh)
+        
+        A = as_matrix(((x, 2*y), (3*y, 4*x)))
+
+        V = VectorFunctionSpace(mesh, 'CG', 1)
+        b = interpolate(Constant((1, 2)), V)
+ 
+        true = A*b
+        me = Eval(true)
+        
+        e = error(true, me)
+        self.assertTrue(e < 1E-14)
+
+    def test_comp_tensor_mat_mat(self):
+        mesh = UnitSquareMesh(4, 4)
+        T = TensorFunctionSpace(mesh, 'DG', 0)
+        
+        A = interpolate(Constant(((1, 2), (3, 4))), T)
+        B = interpolate(Constant(((1, -2), (-1, 4))), T)
+
+        true = A*B
+        me = Eval(true)
+        
+        e = error(true, me)
+        self.assertTrue(e < 1E-14)
+
+    def test_comp_tensor_mat_mat_mat(self):
+        mesh = UnitSquareMesh(4, 4)
+        T = TensorFunctionSpace(mesh, 'DG', 0)
+        
+        A = interpolate(Constant(((1, 2), (3, 4))), T)
+        B = interpolate(Constant(((1, -2), (-1, 4))), T)
+
+        true = A*B*A
+        me = Eval(true)
+        
+        e = error(true, me)
+        self.assertTrue(e < 1E-14)
+
+
+    def test_comp_tensor_mat_mat_vec(self):
+        mesh = UnitSquareMesh(4, 4)
+        
+        T = TensorFunctionSpace(mesh, 'DG', 0)        
+        A = interpolate(Constant(((1, 2), (3, 4))), T)
+        B = interpolate(Constant(((1, -2), (-1, 4))), T)
+
+        V = VectorFunctionSpace(mesh, 'DG', 0)
+        b = interpolate(Constant((-1, -2)), V)
+
+        true = A*B*b
+        me = Eval(true)
+        
+        e = error(true, me)
+        self.assertTrue(e < 1E-14)

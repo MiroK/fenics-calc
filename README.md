@@ -34,7 +34,6 @@ mean = Mean(series)  # Not a lazy node!
 At the moment the interpreter supports most commonly used nodes in UFL except for
 - differentiation nodes, e.g. `grad` (hence algebraic expressions)
 - FEM specific nodes such as `FacetNormal`, `jump`, `avg` and so on 
-- nodes for `ComponentTensor`, `IndexSum` are only partially supported. 
 
 Currently MPI support is missing.
 

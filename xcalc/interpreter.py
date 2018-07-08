@@ -1,6 +1,6 @@
 from ufl.corealg.traversal import traverse_unique_terminals
 from dolfin import (Function, VectorFunctionSpace, interpolate, Expression,
-                    as_vector, Constant)
+                    as_vector, Constant, as_matrix)
 import numpy as np
 import ufl
 
@@ -204,15 +204,42 @@ def component_tensor_rule(expr):
         return Interpreter.eval(as_vector(f))
 
     # The idea now is to to build the expression which represents the sum
-    # needed to compute the component. Computing with scalars this way is
-    # not very efficient - FIXME: drop to numpy?
+    # needed to compute the component, i.e. explicit transformation of the
+    # IndexSum node. Computing with scalars this way is not very efficient ->
+    # FIXME: drop to numpy?
     assert isinstance(f, ufl.indexsum.IndexSum)
 
     summand, sum_indices = f.ufl_operands
+    assert len(sum_indices) == 1  # FIXME: is this necessary
+
+    # Be explicit about the sum - have free indices left to be fill
+    # in by that component
+    sum_expr = sum(replace(summand, sum_indices[0], FixedIndex(j))
+                   for j in range(f.dimension()))
+
+    # Now build the components
+    if len(free_indices) == 1:
+        # Sub for the free_i
+        expr = as_vector(tuple(replace(sum_expr, free_indices[0], FixedIndex(i))
+                               for i in range(f.ufl_index_dimensions[0])))
+    else:
+        mat = []
+        for i in range(f.ufl_index_dimensions[0]):
+            # Sub i
+            sub_i = replace(sum_expr, free_indices[0], FixedIndex(i))
+            
+            row = []
+            for j in range(f.ufl_index_dimensions[1]):
+                # Sub j
+                row.append(replace(sub_i, free_indices[1], FixedIndex(j)))
+            mat.append(row)
+        expr = as_matrix(mat)
+                
+    return Interpreter.eval(expr)
     
     # Let A mat, b vec
     # Handle A*b, b*A, A*(A*b)
-    # Handla A*A, A*A*A, ... A*A need recursions
+    # Handla A*A, A*A*A, ... A*A 
     #
     #
     #     assert len(summand.ufl_free_indices) == 1
