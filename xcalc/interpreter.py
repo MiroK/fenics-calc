@@ -4,27 +4,27 @@ from dolfin import (Function, VectorFunctionSpace, interpolate, Expression,
 import numpy as np
 import ufl
 
-from itertools import imap, repeat
+from itertools import imap, repeat, izip
 import operator
 import timeseries
 from utils import *
 
 
 def Eval(expr):
-#    '''
-#    This intepreter translates expr into a function object or a number. Expr is 
-#    defined via a subset of UFL language. Letting f, g be functions in V 
-#    Eval(op(f, g)) is a function in V with coefs given by (op(coefs(f), coef(g))).
-#    '''
-    return Interpreter.eval(expr)
+   '''
+   This intepreter translates expr into a function object or a number. Expr is 
+   defined via a subset of UFL language. Letting f, g be functions in V 
+   Eval(op(f, g)) is a function in V with coefs given by (op(coefs(f), coef(g))).
+   '''
+   return Interpreter.eval(expr)
 
 
 class Interpreter(object):
-#    '''
-#    This intepreter translates expr into a function object or a number. Expr is 
-#    defined via a subset of UFL language. Letting f, g be functions in V 
-#    Eval(op(f, g)) is a function in V with coefs given by (op(coefs(f), coef(g))).
-#    '''
+    '''
+    This intepreter translates expr into a function object or a number. Expr is 
+    defined via a subset of UFL language. Letting f, g be functions in V 
+    Eval(op(f, g)) is a function in V with coefs given by (op(coefs(f), coef(g))).
+    '''
     # Expression which when evaluated end up in the same space as the arguments
     # or require no reshaping of arraysbefore numpy is applied
     no_reshape_type = {
@@ -68,13 +68,18 @@ class Interpreter(object):
     # FIXME: ListTensor(foo, indices=None) <= we have no support for indices
     
     # Other's where Eval works
-    terminal_type = (Function, int, float, timeseries.TempSeries) 
+    terminal_type = (Function, int, float) 
     value_type = (ufl.algebra.ScalarValue, ufl.algebra.IntValue)  
     index_type = (ufl.indexed.Indexed, )
     compose_type = (ufl.tensors.ComponentTensor, )
 
     @staticmethod
     def eval(expr):
+        # For series we eval each node and make a series of functions
+        # NOTE: intersept here because TempSeries is a terminal type
+        if isinstance(expr, timeseries.TempSeries):
+            return timeseries.TempSeries(zip(map(Interpreter.eval, expr), expr.times))
+
         # Terminals/base cases (also TempSeries) -> identity
         if isinstance(expr, Interpreter.terminal_type): return expr
 
@@ -97,7 +102,7 @@ class Interpreter(object):
         # Don't mix function and terminals
         series = filter(lambda t: isinstance(t, timeseries.TempSeries), terminals)
 
-        assert len(series) == len(terminals) or len(series) == 0, map(len, (series, terminals))
+        assert len(series) == len(terminals) or len(series) == 0, map(type, terminals)
         # For series, we apply op to functions and make new series
         if series:
             return series_rule(expr)
@@ -165,26 +170,33 @@ def series_rule(expr):
     '''Eval expression where the terminals are time series'''
     # Make first sure that the series are compatible in the sense
     # of having same f and time interval
+    print '>>>', expr
+    print '|||', map(type, expr.ufl_operands)
     times = timeseries.common_interval(list(traverse_unique_terminals(expr)))
     assert len(times)
 
-    series = []
-    # NOTE: fall through on args that Eval cann't handle because we just
-    # need to define a node for the series.
-    for o in expr.ufl_operands:
-        try:
-            eo = Interpreter.eval(o)
-        except KeyError:
-            eo = o
-        series.append(eo)
+    def as_iterator(thing, n):
+       if isinstance(thing, timeseries.TempSeries):
+          return ((t,) for t in thing)
+
+       if not thing.ufl_operands:
+          return ((thing, ) for i in range(n))
+
+       return (sum(args, ()) for args in [as_iterator(o, n) for o in thing.ufl_operands])
+
+    print list(as_iterator(expr, len(times)))
+
+    # Now we just want a series of new nodes
+    # FIXME: this is the problem 
 
     # We apply the op to functions in the series and construct a new one
     args = izip(*[s if isinstance(s, timeseries.TempSeries) else repeat(s) 
-                  for s in series])
-    # Apply gives as the node, eval gives us the function
-    functions = [Interpreter.eval(apply(type(expr), arg)) for arg in args]
-
-    return timeseries.TempSeries(zip(functions, times))
+                  for s in expr.ufl_operands])
+    # Apply gives as the node
+    nodes = [apply(type(expr), arg) for arg in args]
+    for n in nodes: print n
+    # A series of new nodes -> series of functions
+    return Interpreter.eval(timeseries.TempSeries(zip(nodes, times)))
 
 
 def component_tensor_rule(expr):

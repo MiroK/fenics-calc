@@ -101,9 +101,7 @@ class TestCases(unittest.TestCase):
 
         std = STD(series)  # Efficiently in PETSc
         # From definition
-        # FIXME: this would be much nicer with
-        # Eval(sqrt(Mean(series**2) - Mean(series)**2))
-        std_ = Eval(sqrt(Mean(Eval(series**2)) - Eval(Mean(series)**2)))
+        std_ = Eval(sqrt(Mean(series**2) - Mean(series)**2))
 
         self.assertTrue(error(std_, std) < 1E-14)
 

@@ -3,49 +3,59 @@ from function_read import (read_h5_function, read_vtu_function,
                            read_h5_mesh, read_vtu_mesh)
 from dolfin import (Function, XDMFFile, HDF5File, FunctionSpace,
                     VectorFunctionSpace, TensorFunctionSpace, warning)
+from ufl.corealg.traversal import traverse_unique_terminals
 from utils import space_of, clip_index
+import interpreter
 import numpy as np
 import itertools
 import os
 
 
 class TempSeries(Function):
-    '''Collection of snapshots that are function in same V'''
+    '''
+    Collection of snapshots that are when Eval are functions in same 
+    space V. That is, series are lazy in general.
+    '''
     def __init__(self, ft_pairs):
         # NOTE: this is derived from Function just to allow nice
         # interplay with the interpreter. If there were space time 
         # elements then we could have eval f(t, x) support
-        functions, times = list(zip(*ft_pairs))
+        nodes, times = list(zip(*ft_pairs))
         
-        # Check that every f has same f
-        V = space_of(functions)
+        # Checks some necessaru conditions for compatibility of nodes in the series
+        assert check_nodes(nodes)
+        # Optimistically take the function space
+        V = interpreter.Eval(next(iter(nodes))).function_space()
         # Time interval check
         dt = np.diff(times)
         assert (dt > 0).all()
         
-        self.functions = functions
+        self.nodes = nodes
         self.times = times
         self.V = V
 
         Function.__init__(self, V)
 
     def __iter__(self):
+        '''Iterate nodes in the series'''
         # op(series) = series(op(functions))
-        for f in self.functions: yield f 
+        for f in self.nodes: yield f 
 
     def __len__(self):
-        return len(self.functions)
+        return len(self.nodes)
 
     def getitem(self, index):
         '''Access elements of the time series'''
         if isinstance(index, int):
-            return self.functions[index]
+            return self.nodes[index]
         else:
-            return TempSeries(zip(self.functions[index], self.times[index]))
+            return TempSeries(zip(self.nodes[index], self.times[index]))
 
+        
 def stream(series, f):
-    '''Pipe series through f'''
-    space_of((series, f))
+    '''Pipe series through Function f'''
+    assert series.V.ufl_element() == f.function_space().ufl_element()
+    assert series.V.mesh().id() == f.function_space().mesh().id()
     for f_ in series.functions:  # Get your own iterator
         f.vector().set_local(f_.vector().get_local())
         yield f
@@ -54,10 +64,10 @@ def stream(series, f):
 def clip(series, t0, t1):
     '''A view of the series with times such that t0 < times < t1'''
     index = clip_index(series.times, t0, t1)
-    functions = series.functions[index]
+    nodes = series.nodes[index]
     times = series.times[index]
 
-    return TempSeries(zip(functions, times))
+    return TempSeries(zip(nodes, times))
 
         
 def common_interval(series):
@@ -67,6 +77,7 @@ def common_interval(series):
     interval, V = [], None
     for s in series:
         V_ = s.V
+        # Space compatibility
         assert V is None or (V.mesh().id() == V_.mesh().id()
                              and 
                              V.ufl_element() == V_.ufl_element())
@@ -77,6 +88,30 @@ def common_interval(series):
         V = V_
         interval = interval_
     return interval
+
+
+def check_nodes(series):
+    '''
+    Nodes in the series are said to be compatible here iff
+
+    1) they are over the same mesh
+    2) they have the same base element
+    3) they have the same shape
+    '''
+    shape, = set(f.ufl_shape for f in series)
+
+    terminal_functions = lambda s=series: (
+        itertools.ifilter(lambda f: isinstance(f, Function),
+                          itertools.chain(*map(traverse_unique_terminals, s)))
+    )
+    # Base element                                                                                 
+    family, = set(f.ufl_element().family() for f in terminal_functions())
+    degree, = set(f.ufl_element().degree() for f in terminal_functions())
+
+    # Mesh
+    mesh_id, = set(f.function_space().mesh().id() for f in terminal_functions())
+
+    return True
 
 
 def get_P1_space(V):

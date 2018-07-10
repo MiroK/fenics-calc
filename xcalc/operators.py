@@ -51,12 +51,14 @@ def Eigv(expr):
 def Mean(series):
     '''A mean of the series is 1/(T - t0)\int_{t0}^{t1}f(t)dt'''
     # Apply simpsons rule
+    series = Eval(series)  # Functions
     mean = Function(series.V)
+    
     x = mean.vector()
     # NOTE: for effiecency we stay away from Interpreter
     # Int
     dts = np.diff(series.times)
-    for dt, (f0, f1) in zip(dts, zip(series.functions[:-1], series.functions[1:])):
+    for dt, (f0, f1) in zip(dts, zip(series.nodes[:-1], series.nodes[1:])):
         x.axpy(dt/2., f0.vector())  # (f0+f1)*dt/2
         x.axpy(dt/2., f1.vector())
     # Time interval scaling
@@ -68,13 +70,14 @@ def Mean(series):
 def RMS(series):
     '''sqrt(1/(T - t0)\int_{t0}^{t1}f^2(t)dt'''
     # Again by applying simpson
+    series = Eval(series)
     rms = Function(series.V)
     # NOTE: for efficiency we stay away from Interpreter and all is in PETSc layer
     x = as_backend_type(rms.vector()).vec()  # PETSc.Vec
     y = x.copy()  # Stores fi**2
     # Integrate
     dts = np.diff(series.times)
-    f_vectors = [as_backend_type(f.vector()).vec() for f in series.functions]
+    f_vectors = [as_backend_type(f.vector()).vec() for f in series.nodes]
     for dt, (f0, f1) in zip(dts, zip(f_vectors[:-1], f_vectors[1:])):
         y.pointwiseMult(f0, f0)  # y = f0**2
         x.axpy(dt/2., y)  # (f0**2+f1**2)*dt/2
@@ -102,13 +105,14 @@ def STD(series):
 
     # now, compute the STD
     # for this, follow the example of RMS
+    series = Eval(series)
     std = Function(series.V)
     # NOTE: for efficiency we stay away from Interpreter and all is in PETSc layer
     x = as_backend_type(std.vector()).vec()  # PETSc.Vec, stores the final output
     y = x.copy()  # Stores the current working field
     # Integrate
     dts = np.diff(series.times)
-    f_vectors = [as_backend_type(f.vector()).vec() for f in series.functions]
+    f_vectors = [as_backend_type(f.vector()).vec() for f in series.nodes]
     for dt, (f0, f1) in zip(dts, zip(f_vectors[:-1], f_vectors[1:])):
         y.pointwiseMult(f0, f0)  # y = f0**2
         x.axpy(dt / 2., y)  # x += dt / 2 * y
@@ -135,10 +139,10 @@ def SlidingWindowFilter(Filter, width, series):
     t_buffer, f_buffer = deque(maxlen=width), deque(maxlen=width)
 
     times = series.times
-    functions = series.functions
+    nodes = series.nodes
 
     filtered_ft_pairs = []
-    for t, f in zip(times, functions):
+    for t, f in zip(times, nodes):
         t_buffer.append(t)
         f_buffer.append(f)
         # Once the deque is full it will 'overflow' from right so then
