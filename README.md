@@ -27,7 +27,7 @@ mesh = UnitSquareMesh(3, 3)
 V = FunctionSpace(mesh, 'CG', 1)
 series = PVDTempSeries('pvd_test.pvd', V)
 
-mean = Mean(series)  # Not a lazy node!
+mean = Mean(abs(series))  # A lazy node! 
 ````
 
 ## What works and what does not
