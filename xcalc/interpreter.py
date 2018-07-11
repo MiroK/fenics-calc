@@ -170,31 +170,31 @@ def series_rule(expr):
     '''Eval expression where the terminals are time series'''
     # Make first sure that the series are compatible in the sense
     # of having same f and time interval
-    print '>>>', expr
-    print '|||', map(type, expr.ufl_operands)
-    times = timeseries.common_interval(list(traverse_unique_terminals(expr)))
+    foos = filter(lambda f: isinstance(f, Function), traverse_unique_terminals(expr))
+    times = timeseries.common_interval(foos)
     assert len(times)
 
-    def as_iterator(thing, n):
-       if isinstance(thing, timeseries.TempSeries):
-          return ((t,) for t in thing)
+    # The idea now is to propagate the expression by which I mean that
+    # we grow the expr using nodes in the series
+    def unpack(expr):
+       '''expr -> iterable of expr'''
+       return (apply(type(expr), sum(args, ())) for args in expand(expr.ufl_operands))
 
-       if not thing.ufl_operands:
-          return ((thing, ) for i in range(n))
+    def expand(operands):
+       iterators = []
+       for o in operands:
+          if isinstance(o, timeseries.TempSeries):
+             iterators.append(((f, ) for f in o))
+          # Nonseries terminal
+          elif not o.ufl_operands:
+             iterators.append(((f, ) for f in repeat(o)))
+          # An expression
+          else:
+             iterators.append(((f, ) for f in unpack(o)))
+         
+       return izip(*iterators)
 
-       return (sum(args, ()) for args in [as_iterator(o, n) for o in thing.ufl_operands])
-
-    print list(as_iterator(expr, len(times)))
-
-    # Now we just want a series of new nodes
-    # FIXME: this is the problem 
-
-    # We apply the op to functions in the series and construct a new one
-    args = izip(*[s if isinstance(s, timeseries.TempSeries) else repeat(s) 
-                  for s in expr.ufl_operands])
-    # Apply gives as the node
-    nodes = [apply(type(expr), arg) for arg in args]
-    for n in nodes: print n
+    nodes = unpack(expr)
     # A series of new nodes -> series of functions
     return Interpreter.eval(timeseries.TempSeries(zip(nodes, times)))
 
@@ -248,10 +248,3 @@ def component_tensor_rule(expr):
         expr = as_matrix(mat)
                 
     return Interpreter.eval(expr)
-    
-    # Let A mat, b vec
-    # Handle A*b, b*A, A*(A*b)
-    # Handla A*A, A*A*A, ... A*A 
-    #
-    #
-    #     assert len(summand.ufl_free_indices) == 1

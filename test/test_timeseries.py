@@ -71,33 +71,33 @@ class TestCases(unittest.TestCase):
         for f in series01:
             self.assertTrue(error(Constant(1), f) < 1E-14)
             
-#     def test_vec_mag(self):
-#         mesh = UnitSquareMesh(2, 2)
-#         V = VectorFunctionSpace(mesh, 'CG', 1)
+    def test_vec_mag(self):
+        mesh = UnitSquareMesh(2, 2)
+        V = VectorFunctionSpace(mesh, 'CG', 1)
                 
-#         series = TempSeries([(interpolate(Expression(('x[0]', '0'), degree=1), V), 0),
-#                               (interpolate(Expression(('0', 'x[1]'), degree=1), V), 1)])
+        series = TempSeries([(interpolate(Expression(('x[0]', '0'), degree=1), V), 0),
+                              (interpolate(Expression(('0', 'x[1]'), degree=1), V), 1)])
 
-#         mag_series = Eval(sqrt(inner(series, series)))
-#         self.assertTrue(error(Expression('x[0]', degree=1), mag_series.getitem(0)) < 1E-14)
-#         self.assertTrue(error(Expression('x[1]', degree=1), mag_series.getitem(1)) < 1E-14)
+        mag_series = Eval(sqrt(inner(series, series)))
+        self.assertTrue(error(Expression('x[0]', degree=1), mag_series.getitem(0)) < 1E-14)
+        self.assertTrue(error(Expression('x[1]', degree=1), mag_series.getitem(1)) < 1E-14)
 
-#     def test_steam(self):
-#         mesh = UnitSquareMesh(2, 2)
-#         V = FunctionSpace(mesh, 'DG', 0)
+    def test_steam(self):
+        mesh = UnitSquareMesh(2, 2)
+        V = FunctionSpace(mesh, 'DG', 0)
                 
-#         series0 = TempSeries([(interpolate(Constant(1), V), 0),
-#                               (interpolate(Constant(2), V), 1)])
+        series0 = TempSeries([(interpolate(Constant(1), V), 0),
+                              (interpolate(Constant(2), V), 1)])
 
-#         v = Function(V)
-#         stream_series = stream(series0, v)
-#         # NOTE: it is crucial that this is lazy. With normal zip
-#         # v in all the pairse has the last value
-#         for vi, v in izip(series0, stream_series):
-#             self.assertTrue(error(vi, v) < 1E-14)
+        v = Function(V)
+        stream_series = stream(2*series0, v)
+        # NOTE: it is crucial that this is lazy. With normal zip
+        # v in all the pairse has the last value
+        for vi, v in izip(series0, stream_series):
+            self.assertTrue(error(2*vi, v) < 1E-14)
 
-#         for i, v in enumerate(stream_series):
-#             self.assertTrue(error(series0.getitem(i), v) < 1E-14)
+        for i, v in enumerate(stream_series):
+            self.assertTrue(error(2*series0.getitem(i), v) < 1E-14)
 
     def test_clip(self):
         mesh = UnitSquareMesh(2, 2)
@@ -129,6 +129,23 @@ class TestCases(unittest.TestCase):
         self.assertTrue(error(Expression('0', degree=1), mag_series.getitem(0)) < 1E-14)
         self.assertTrue(error(Expression('x[1]', degree=1), mag_series.getitem(1)) < 1E-14)
 
+        
+    def test_algebra_harder(self):
+        mesh = UnitSquareMesh(2, 2)
+        V = FunctionSpace(mesh, 'DG', 0)
+                
+        series0 = TempSeries([(interpolate(Constant(2), V), 0),
+                              (interpolate(Constant(3), V), 1)])
+
+        series1 = TempSeries([(interpolate(Constant(4), V), 0),
+                              (interpolate(Constant(5), V), 1)])
+
+        series01 = Eval(series1**2 - 2*series0)
+        self.assertTrue(np.linalg.norm(series01.times - np.array([0, 1])) < 1E-14)
+
+        # Now each should be 1
+        for f, true in zip(series01, (Constant(12), Constant(19))):
+            self.assertTrue(error(true, f) < 1E-14)
 
         
 

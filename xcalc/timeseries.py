@@ -54,9 +54,11 @@ class TempSeries(Function):
         
 def stream(series, f):
     '''Pipe series through Function f'''
+    series = interpreter.Eval(series)
     assert series.V.ufl_element() == f.function_space().ufl_element()
     assert series.V.mesh().id() == f.function_space().mesh().id()
-    for f_ in series.functions:  # Get your own iterator
+
+    for f_ in series:  # Get your own iterator
         f.vector().set_local(f_.vector().get_local())
         yield f
 
