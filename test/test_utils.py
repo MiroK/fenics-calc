@@ -1,5 +1,5 @@
 from xcalc.utils import (space_of, common_sub_element, coefs_of, numpy_op_indices,
-                         find_first, find_last, clip_index)
+                         find_first, find_last, clip_index, make_space)
 from dolfin import *
 import numpy as np
 import unittest
@@ -94,4 +94,30 @@ class TestCases(unittest.TestCase):
         i = clip_index(a, f, l)
         self.assertTrue(all(f < x < l for x in a[i]))
 
-        
+    def test_make_space_hdiv_mat(self):
+        V = FiniteElement('Raviart-Thomas', triangle, 1)
+        mesh = UnitSquareMesh(2, 2)
+
+        self.assertEqual(make_space(V, (2, 2), mesh).ufl_element(),
+                         VectorFunctionSpace(mesh, 'RT', 1).ufl_element())
+
+    def test_make_space_hdiv_vec(self):
+        V = FiniteElement('Raviart-Thomas', triangle, 1)
+        mesh = UnitSquareMesh(2, 2)
+
+        self.assertEqual(make_space(V, (2, ), mesh).ufl_element(),
+                         V)
+
+    def test_make_space_H1_mat(self):
+        V = FiniteElement('Lagrange', triangle, 1)
+        mesh = UnitSquareMesh(2, 2)
+
+        self.assertEqual(make_space(V, (2, 2), mesh).ufl_element(),
+                         TensorFunctionSpace(mesh, 'Lagrange', 1).ufl_element())
+
+    def test_make_space_hdiv_fail(self):
+        V = FiniteElement('Raviart-Thomas', triangle, 1)
+        mesh = UnitSquareMesh(2, 2)
+        # Can't create scalar here
+        with self.assertRaises(AssertionError):
+            make_space(V, (), mesh)

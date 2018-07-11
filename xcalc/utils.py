@@ -75,16 +75,16 @@ def common_sub_element(spaces):
 
 def make_space(V, shape, mesh):
     '''Tensor product space of right shape'''
-    # FIXME: this is not robust wrt Hdiv, Ned etc
-    if not shape:
-        elm = V
-    elif len(shape) == 1:
-        elm = VectorElement(V, len(shape))
-    elif len(shape) == 2:
-        elm = TensorElement(V, shape)
-    else:
-        raise ValueError('No spaces for tensor of rank 3 and higher')
+    finite_elements = [lambda x, shape: x,
+                       lambda x, shape: VectorElement(x, dim=shape[0]),
+                       lambda x, shape: TensorElement(x, shape=shape)]
+    # FEM upscales; cant upscale larger
+    assert len(shape) - len(V.value_shape()) >= 0
+    # No tensor
+    assert len(shape) <= 2
 
+    fe_glue = finite_elements[len(shape) - len(V.value_shape())]
+    elm = fe_glue(V, shape)
     return FunctionSpace(mesh, elm)
 
 
