@@ -75,6 +75,7 @@ def common_sub_element(spaces):
 
 def make_space(V, shape, mesh):
     '''Tensor product space of right shape'''
+    # FIXME: this is not robust wrt Hdiv, Ned etc
     if not shape:
         elm = V
     elif len(shape) == 1:

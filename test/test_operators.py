@@ -1,6 +1,6 @@
 from xcalc.interpreter import Eval
 from xcalc.timeseries import TempSeries
-from xcalc.operators import Eigw, Eigv, Mean, RMS, SlidingWindowFilter, STD
+from xcalc.operators import Eigw, Eigv, Mean, RMS, STD, SlidingWindowFilter
 from dolfin import *
 import numpy as np
 import unittest
@@ -22,7 +22,7 @@ class TestCases(unittest.TestCase):
         V = TensorFunctionSpace(mesh, 'DG', 0)
         f = interpolate(Constant(A), V)
 
-        me = Eigw(f+f)
+        me = Eval(Eigw(f+f))  # Eval o Declared
         true = Constant(np.linalg.eigvals(A+A))
 
         self.assertTrue(error(true, me) < 1E-14)
@@ -34,7 +34,7 @@ class TestCases(unittest.TestCase):
         V = TensorFunctionSpace(mesh, 'DG', 0)
         f = interpolate(Constant(A), V)
         # FIXME: 2*f leads to ComponentTensor which we don't handle well
-        me = Eigv(f)
+        me = Eval(Eigv(f))
         true = Constant((np.linalg.eig(A)[1]).T)
 
         self.assertTrue(error(true, me) < 1E-14)
@@ -50,7 +50,7 @@ class TestCases(unittest.TestCase):
             v = interpolate(f, V)
             ft_pairs.append((v, t))
 
-        mean = Mean(TempSeries(ft_pairs))
+        mean = Eval(Mean(TempSeries(ft_pairs)))  # Eval o Declared
 
         f.t = 1.0
         self.assertTrue(error(f, mean) < 1E-14)
@@ -66,25 +66,11 @@ class TestCases(unittest.TestCase):
             v = interpolate(f, V)
             ft_pairs.append((v, t))
 
-        rms = RMS(TempSeries(ft_pairs))
+        rms = Eval(RMS(TempSeries(ft_pairs)))
 
         f.t = sqrt(4/3.)
         # Due to quadrature error 
         self.assertTrue(error(f, rms) < 1E-4)
-
-    def test_sliding_window(self):
-        mesh = UnitSquareMesh(4, 4)
-        V = FunctionSpace(mesh, 'CG', 1)
-
-        series = TempSeries([(interpolate(Constant(1), V), 0),
-                             (interpolate(Constant(2), V), 1),
-                             (interpolate(Constant(3), V), 2),
-                             (interpolate(Constant(4), V), 3)])
-
-        f_series = SlidingWindowFilter(Mean, 2, series)
-
-        assert len(f_series) == 3
-        assert f_series.times == (1, 2, 3)
 
     def test_std(self):
         mesh = UnitSquareMesh(4, 4)
@@ -99,10 +85,27 @@ class TestCases(unittest.TestCase):
 
         series = TempSeries(ft_pairs)
 
-        std = STD(series)  # Efficiently in PETSc
+        std = Eval(STD(series))  # Efficiently in PETSc
         # From definition
         std_ = Eval(sqrt(Mean(series**2) - Mean(series)**2))
 
         self.assertTrue(error(std_, std) < 1E-14)
 
+    def test_sliding_window(self):
+        mesh = UnitSquareMesh(4, 4)
+        V = FunctionSpace(mesh, 'CG', 1)
+
+        series = TempSeries([(interpolate(Constant(1), V), 0),
+                             (interpolate(Constant(2), V), 1),
+                             (interpolate(Constant(3), V), 2),
+                             (interpolate(Constant(4), V), 3)])
+
+        f_series = Eval(SlidingWindowFilter(Mean, 2, series**2))
+
+        assert len(f_series) == 3
+        assert f_series.times == (1, 2, 3)
+
+        self.assertTrue(error(Constant(2.5), f_series.getitem(0)) < 1E-14)
+        self.assertTrue(error(Constant(6.5), f_series.getitem(1)) < 1E-14)
+        self.assertTrue(error(Constant(12.5), f_series.getitem(2)) < 1E-14)
 

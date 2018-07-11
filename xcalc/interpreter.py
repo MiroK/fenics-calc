@@ -3,10 +3,11 @@ from dolfin import (Function, VectorFunctionSpace, interpolate, Expression,
                     as_vector, Constant, as_matrix)
 import numpy as np
 import ufl
-
 from itertools import imap, repeat, izip
 import operator
+
 import timeseries
+import operators
 from utils import *
 
 
@@ -75,6 +76,12 @@ class Interpreter(object):
 
     @staticmethod
     def eval(expr):
+        # Guys with their own logic for collapsing into functions
+        # Okay we combine 2 design patters, LazyNodes do it themselves
+        # series rely on the interpreter
+        if isinstance(expr, operators.LazyNode):
+            return expr.evaluate()
+       
         # For series we eval each node and make a series of functions
         # NOTE: intersept here because TempSeries is a terminal type
         if isinstance(expr, timeseries.TempSeries):
