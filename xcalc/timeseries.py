@@ -73,21 +73,14 @@ def clip(series, t0, t1):
 
         
 def common_interval(series):
-    '''Series are compatible if they over same V and cover same interval'''
+    '''Series are compatible if they have same intervals'''
     series = filter(lambda s: isinstance(s, TempSeries), series)
 
-    interval, V = [], None
+    interval = []
     for s in series:
-        V_ = s.V
-        # Space compatibility
-        assert V is None or (V.mesh().id() == V_.mesh().id()
-                             and 
-                             V.ufl_element() == V_.ufl_element())
-
         interval_ = np.array(s.times)
         assert not len(interval) or np.linalg.norm(interval - interval_) < 1E-14
 
-        V = V_
         interval = interval_
     return interval
 
@@ -112,7 +105,7 @@ def check_nodes(series):
 
     # Mesh
     mesh_id, = set(f.function_space().mesh().id() for f in terminal_functions())
-
+    
     return True
 
 

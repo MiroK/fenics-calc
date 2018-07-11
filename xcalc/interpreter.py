@@ -175,11 +175,14 @@ def indexed_rule(expr):
 
 def series_rule(expr):
     '''Eval expression where the terminals are time series'''
-    # Make first sure that the series are compatible in the sense
-    # of having same f and time interval
     foos = filter(lambda f: isinstance(f, Function), traverse_unique_terminals(expr))
+    # Make first sure that the series are compatible in the sense of having same time 
+    # interval
     times = timeseries.common_interval(foos)
     assert len(times)
+
+    # Compatibility of spaces
+    common_sub_element([f.function_space() for f in foos])
 
     # The idea now is to propagate the expression by which I mean that
     # we grow the expr using nodes in the series
