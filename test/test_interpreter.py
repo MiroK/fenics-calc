@@ -1,5 +1,6 @@
 from xcalc.interpreter import Eval
 from dolfin import *
+import numpy as np
 import unittest
 
 
@@ -301,5 +302,75 @@ class TestCases(unittest.TestCase):
         true = Constant(2)*A
         me = Eval(true)
         
+        e = error(true, me)
+        self.assertTrue(e < 1E-14)
+
+    def test_min(self):
+        mesh = UnitSquareMesh(4, 4)
+        x, y = SpatialCoordinate(mesh)
+        
+        true = Min(x, y)
+        me = Eval(true)
+        
+        e = error(true, me)
+        self.assertTrue(e < 1E-14)
+
+    def test_max(self):
+        mesh = UnitSquareMesh(4, 4)
+        x, y = SpatialCoordinate(mesh)
+        
+        true = Max(x+y, 2*y)
+        me = Eval(true)
+        
+        e = error(true, me)
+        self.assertTrue(e < 1E-14)
+
+    def test_cond_simple_conv(self):
+        # Outside of CG1 with nonlinearity?
+        errors = []
+        for n in (4, 8, 16, 32, 64):
+            mesh = UnitSquareMesh(n, n)
+            x, y = SpatialCoordinate(mesh)
+            true = conditional(x < y, x+y, x-y)
+        
+            me = Eval(true)
+            errors.append(error(true, me))
+        self.assertTrue((np.diff(errors) < 0).all())
+
+    def test_cond_simple(self):
+        mesh = UnitSquareMesh(4, 4)
+        V = FunctionSpace(mesh, 'DG', 0)
+
+        x = interpolate(Constant(1), V)
+        y = interpolate(Constant(2), V)
+
+        true = conditional(x < y, x+y, x-y)        
+        me = Eval(true)
+
+        e = error(true, me)
+        self.assertTrue(e < 1E-14)
+
+    def test_cond_logic(self):
+        errors = []
+        for n in (4, 8, 16, 32, 64):
+            mesh = UnitSquareMesh(n, n)
+            x, y = SpatialCoordinate(mesh)
+            true = conditional(And(x < y, Constant(0) < x), x+y, x-y)
+        
+            me = Eval(true)
+            errors.append(error(true, me))
+        self.assertTrue((np.diff(errors) < 0).all())
+
+    def test_cond_logic_simple(self):
+        # We're outside of the CG1!
+        mesh = UnitSquareMesh(4, 4)
+        V = FunctionSpace(mesh, 'DG', 0)
+
+        x = interpolate(Constant(1), V)
+        y = interpolate(Constant(2), V)
+
+        true = conditional(And(x < y, 0 < x), x+y, x-y)        
+        me = Eval(true)
+
         e = error(true, me)
         self.assertTrue(e < 1E-14)

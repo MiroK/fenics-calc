@@ -1,4 +1,6 @@
 from ufl.corealg.traversal import traverse_unique_terminals
+from ufl.conditional import (LT, GT, LE, GE, EQ, NE, AndCondition, OrCondition,
+                             NotCondition)
 from dolfin import (Function, VectorFunctionSpace, interpolate, Expression,
                     as_vector, Constant, as_matrix)
 import numpy as np
@@ -46,7 +48,19 @@ class Interpreter(object):
         ufl.mathfunctions.Asin: np.arcsin,
         ufl.mathfunctions.Acos: np.arccos,
         ufl.mathfunctions.Atan: np.arctan,
-        ufl.mathfunctions.Atan2: np.arctan2
+        ufl.mathfunctions.Atan2: np.arctan2,
+        ufl.operators.MinValue: np.minimum,
+        ufl.operators.MaxValue: np.maximum,
+        LT: lambda x, y: np.array(x < y, dtype=float),
+        GT: lambda x, y: np.array(x > y, dtype=float),
+        LE: lambda x, y: np.array(x <= y, dtype=float),
+        GE: lambda x, y: np.array(x >= y, dtype=float),
+        EQ: lambda x, y: np.array(x == y, dtype=float),
+        NE: lambda x, y: np.array(x != y, dtype=float),
+        AndCondition: lambda x, y: np.array(np.logical_and(x, y), dtype=float),
+        OrCondition: lambda x, y: np.array(np.logical_or(x, y), dtype=float),
+        NotCondition: lambda x: np.array(np.logical_not(x), dtype=float),
+        ufl.operators.Conditional: lambda pred, true, false: np.where(pred, true, false)
     }
 
     # Expression which when evaluated end up in general in different space than 
@@ -95,6 +109,9 @@ class Interpreter(object):
 
         # To number
         if isinstance(expr, Constant): return float(expr)
+
+        # To number
+        if isinstance(expr, ufl.constantvalue.Zero): return 0
 
         # Recast spatial coordinate as CG1 functions
         if isinstance(expr, ufl.geometry.SpatialCoordinate):
