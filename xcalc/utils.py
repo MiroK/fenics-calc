@@ -41,17 +41,15 @@ def space_of(foos):
     return FunctionSpace(mesh, elm)
 
 
-def numpy_op_indices(V, shape):
+def numpy_op_indices(V):
     '''Iterator over dofs of V in a logical way'''
     # next(numpy_of_indices(V)) gets indices for accessing coef of function in V
     # in a way that after reshaping the values can be used by numpy
     nsubs = V.num_sub_spaces()
     # Get will give us e.g matrix to go with det to set the value of det
     if nsubs:
-        assert len(shape)
         indices = imap(list, izip(*[iter(V.sub(comp).dofmap().dofs()) for comp in range(nsubs)]))
     else:
-        assert not len(shape)
         indices = iter(V.dofmap().dofs())
 
     return indices
@@ -61,16 +59,45 @@ def common_sub_element(spaces):
     '''V for space which are tensor products of V otherwise fail'''
     V = None
     for space in spaces:
-        if not space.num_sub_spaces():
-            V_ = space.ufl_element()
-        # V x V x V ... => V
-        else:
-            V_, = set(space.ufl_element().sub_elements())
+        V_ = component_element(space)        
         # Unset or agrees
         assert V is None or V == V_
         V = V_
     # All is well
     return V
+
+
+def component_element(elm):
+    '''If the space/FE has a structure V x V ... x V find V'''
+    # Type convert
+    if isinstance(elm, FunctionSpace):
+        return component_element(elm.ufl_element())
+    # Single component
+    if not elm.sub_elements():
+        return elm
+    # V x V x V ... => V
+    V_, = set(elm.sub_elements())
+
+    return V_
+
+
+def shape_representation(shape, elm):
+    '''How to reshape expression of shape represented in FE space with elm'''
+    celm = component_element(elm)
+    # Scalar is a base
+    if not celm.value_shape():
+        return shape
+    # Can't represent vector with matrix space
+    eshape = celm.value_shape()
+    assert len(shape) >= len(eshape)
+
+    # Vec with vec requires no reshaping
+    if shape == eshape:
+        return ()
+    # Compatibility
+    assert shape[-len(eshape):] ==  eshape
+    # So (2, 2) with (2, ) is (2, )
+    return shape[:len(eshape)]
 
 
 def make_space(V, shape, mesh):
@@ -100,10 +127,10 @@ def numpy_op_foo(args, op, shape_res):
         arg_coefs = coefs_of(arg)
 
         V = arg.function_space()
-        shape = arg.ufl_shape
+        shape = shape_representation(arg.ufl_shape, V.ufl_element())
 
-        # How to access coefficients by indices 
-        indices = numpy_op_indices(V, shape)
+        # How to access coefficients by indices
+        indices = numpy_op_indices(V)
 
         # Get values for op by reshaping
         if shape:
@@ -118,11 +145,11 @@ def numpy_op_foo(args, op, shape_res):
     # Construct the result space
     V_res = make_space(sub_elm, shape_res, V.mesh())
     # How to reshape the result and assign
-    if shape_res:
-        dofs = imap(list, numpy_op_indices(V_res, shape_res))
+    if shape_representation(shape_res, V_res.ufl_element()):
+        dofs = imap(list, numpy_op_indices(V_res))
         reshape = lambda x: x.flatten()
     else:
-        dofs = numpy_op_indices(V_res, shape_res)
+        dofs = numpy_op_indices(V_res)
         reshape = lambda x: x
         
     # Fill coefs of the result expression

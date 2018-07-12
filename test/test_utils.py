@@ -75,7 +75,7 @@ class TestCases(unittest.TestCase):
         true = np.column_stack([W.sub(i).dofmap().dofs() for i in range(2)])
         
         me = np.zeros_like(true)
-        for row, row_values in enumerate(numpy_op_indices(W, (2, ))):
+        for row, row_values in enumerate(numpy_op_indices(W)):
             me[row] = row_values
 
         error = np.linalg.norm(me - true)
