@@ -1,5 +1,4 @@
 # Some pseudo nodes (function constructors) that could be useful
-# NOTE: unlike ufl nodes these are not lazy, i.e Eval immediately
 from dolfin import Constant, interpolate, Function, as_backend_type
 from collections import deque
 from utils import numpy_op_foo, common_sub_element, make_space
@@ -89,6 +88,36 @@ class Eigv(LazyNode):
         return self
 
 
+class Minimum(LazyNode):
+    '''Minimum value in a tensor of rank > 0'''
+    def __init__(self, expr):
+        assert len(expr.ufl_shape) > 0
+
+        self.shape = ()
+        self.expr = expr
+        LazyNode.__init__(self, LazyNode.space_for(expr, self.shape))
+
+    def evaluate(self):
+        f = interpreter.Eval(self.expr)
+        self.interpolate(numpy_op_foo(args=(f, ), op=np.min, shape_res=self.shape))
+        return self
+
+    
+class Maximum(LazyNode):
+    '''Maximum value in a tensor of rank > 0'''
+    def __init__(self, expr):
+        assert len(expr.ufl_shape) > 0
+
+        self.shape = ()
+        self.expr = expr
+        LazyNode.__init__(self, LazyNode.space_for(expr, self.shape))
+
+    def evaluate(self):
+        f = interpreter.Eval(self.expr)
+        self.interpolate(numpy_op_foo(args=(f, ), op=np.max, shape_res=self.shape))
+        return self
+
+    
 class Mean(LazyNode):
     '''A mean of the series is 1/(T - t0)\int_{t0}^{t1}f(t)dt'''
     def __init__(self, expr):

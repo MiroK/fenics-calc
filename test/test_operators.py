@@ -1,6 +1,7 @@
 from xcalc.interpreter import Eval
 from xcalc.timeseries import TempSeries
-from xcalc.operators import Eigw, Eigv, Mean, RMS, STD, SlidingWindowFilter
+from xcalc.operators import (Eigw, Eigv, Mean, RMS, STD, SlidingWindowFilter,
+                             Minimum, Maximum)
 from dolfin import *
 import numpy as np
 import unittest
@@ -108,4 +109,35 @@ class TestCases(unittest.TestCase):
         self.assertTrue(error(Constant(2.5), f_series.getitem(0)) < 1E-14)
         self.assertTrue(error(Constant(6.5), f_series.getitem(1)) < 1E-14)
         self.assertTrue(error(Constant(12.5), f_series.getitem(2)) < 1E-14)
+
+    def test_minimum(self):
+        A = np.array([[1, -2], [-3, 1]])
+
+        mesh = UnitSquareMesh(10, 10)
+        V = TensorFunctionSpace(mesh, 'DG', 0)
+        f = interpolate(Constant(A), V)
+
+        me = Eval(Minimum(Eigw(f+f)))  # Eval o Declared
+        true = Constant(np.min(np.linalg.eigvals(A+A)))
+
+        self.assertTrue(error(true, me) < 1E-14)
+
+    def test_maximum(self):
+        A = np.array([[1, -2], [-3, 1]])
+
+        mesh = UnitSquareMesh(10, 10)
+        V = TensorFunctionSpace(mesh, 'DG', 0)
+        f = interpolate(Constant(A), V)
+        
+        me = Eval(Maximum(Eigw(f-3*f)))  # Eval o Declared
+        true = Constant(np.max(np.linalg.eigvals(A-3*A)))
+
+        self.assertTrue(error(true, me) < 1E-14)
+
+    def test_maximum_fail(self):
+        mesh = UnitSquareMesh(10, 10)
+        V = FunctionSpace(mesh, 'RT', 1)
+        with self.assertRaises(AssertionError):
+            Eval(Maximum(Function(V)))  # Don't know how to collapse this
+
 

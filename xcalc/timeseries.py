@@ -14,7 +14,8 @@ import os
 class TempSeries(Function):
     '''
     Collection of snapshots that are when Eval are functions in same 
-    space V. That is, series are lazy in general.
+    space V. That is, series are lazy in general. UFL nodes are supported 
+    over series with logic op([s], [t]) = [op(s, t)].
     '''
     def __init__(self, ft_pairs):
         # NOTE: this is derived from Function just to allow nice

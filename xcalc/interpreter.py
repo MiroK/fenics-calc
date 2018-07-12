@@ -210,51 +210,64 @@ def series_rule(expr):
 
 
 def component_tensor_rule(expr):
-    '''Tensors whose components are given by computation of some sort.'''
-    f, free_indices = expr.ufl_operands
-    # Want to build vectors or matrices
-    assert len(free_indices) == 1 or len(free_indices) == 2
+   '''Tensors whose components are given by computation of some sort.'''
+   f, free_indices = expr.ufl_operands
+   # Want to build vectors or matrices
+   assert len(free_indices) == 1 or len(free_indices) == 2
 
-    # Simple rules where the eval node is obtained just by substitution
-    if not isinstance(f, ufl.indexsum.IndexSum):
-        # FIXME: can we really only get vectors this way?
-        assert len(free_indices) == 1
+   # Simple rules where the eval node is obtained just by substitution
+   if not isinstance(f, ufl.indexsum.IndexSum):
+      # Vector from 2*Constant((1, 2)) 
+      if len(free_indices) == 1:
+         index = free_indices[0]
+         f = tuple(replace(f, index, FixedIndex(i)) for i in range(expr.ufl_shape[0]))
+         
+         return Interpreter.eval(as_vector(f))
         
-        index = free_indices[0]
-        f = tuple(replace(f, index, FixedIndex(i)) for i in range(expr.ufl_shape[0]))
+      # Matrix from 2*Costant(((1, 2), (3, 4)))
+      if len(free_indices) == 2:
+         mat = []
+         for i in range(expr.ufl_shape[0]):
+            f_i = replace(f, free_indices[0], FixedIndex(i))
 
-        return Interpreter.eval(as_vector(f))
-
-    # The idea now is to to build the expression which represents the sum
-    # needed to compute the component, i.e. explicit transformation of the
-    # IndexSum node. Computing with scalars this way is not very efficient ->
-    # FIXME: drop to numpy?
-    assert isinstance(f, ufl.indexsum.IndexSum)
-
-    summand, sum_indices = f.ufl_operands
-    assert len(sum_indices) == 1  # FIXME: is this necessary
-
-    # Be explicit about the sum - have free indices left to be fill
-    # in by that component
-    sum_expr = sum(replace(summand, sum_indices[0], FixedIndex(j))
-                   for j in range(f.dimension()))
-
-    # Now build the components
-    if len(free_indices) == 1:
-        # Sub for the free_i
-        expr = as_vector(tuple(replace(sum_expr, free_indices[0], FixedIndex(i))
-                               for i in range(f.ufl_index_dimensions[0])))
-    else:
-        mat = []
-        for i in range(f.ufl_index_dimensions[0]):
-            # Sub i
-            sub_i = replace(sum_expr, free_indices[0], FixedIndex(i))
-            
             row = []
-            for j in range(f.ufl_index_dimensions[1]):
-                # Sub j
-                row.append(replace(sub_i, free_indices[1], FixedIndex(j)))
+            for j in range(expr.ufl_shape[1]):
+               row.append(replace(f_i, free_indices[1], FixedIndex(j)))
             mat.append(row)
-        expr = as_matrix(mat)
-                
-    return Interpreter.eval(expr)
+         return Interpreter.eval(as_matrix(mat))
+         
+   # The idea now is to to build the expression which represents the sum
+   # needed to compute the component, i.e. explicit transformation of the
+   # IndexSum node. Computing with scalars this way is not very efficient ->
+   # FIXME: drop to numpy?
+   assert isinstance(f, ufl.indexsum.IndexSum)
+
+   summand, sum_indices = f.ufl_operands
+   assert len(sum_indices) == 1  # FIXME: is this necessary
+
+   # Be explicit about the sum - have free indices left to be fill
+   # in by that component
+   sum_expr = sum(replace(summand, sum_indices[0], FixedIndex(j))
+                  for j in range(f.dimension()))
+
+   # Now build the components
+   if len(free_indices) == 1:
+      # Sub for the free_i
+      expr = as_vector(tuple(replace(sum_expr, free_indices[0], FixedIndex(i))
+                             for i in range(f.ufl_index_dimensions[0])))
+
+      return Interpreter.eval(expr)
+
+   mat = []
+   for i in range(f.ufl_index_dimensions[0]):
+      # Sub i
+      sub_i = replace(sum_expr, free_indices[0], FixedIndex(i))
+      
+      row = []
+      for j in range(f.ufl_index_dimensions[1]):
+         # Sub j
+         row.append(replace(sub_i, free_indices[1], FixedIndex(j)))
+      mat.append(row)
+   expr = as_matrix(mat)
+      
+   return Interpreter.eval(expr)

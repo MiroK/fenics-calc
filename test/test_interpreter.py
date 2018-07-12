@@ -291,3 +291,15 @@ class TestCases(unittest.TestCase):
         
         e = error(true, me)
         self.assertTrue(e < 1E-14)
+
+    def test_comp_tensor_num_mat(self):
+        mesh = UnitSquareMesh(4, 4)
+        x, y = SpatialCoordinate(mesh)
+
+        A = as_matrix(((x, y), (y, -x)))
+        
+        true = Constant(2)*A
+        me = Eval(true)
+        
+        e = error(true, me)
+        self.assertTrue(e < 1E-14)
