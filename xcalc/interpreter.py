@@ -10,6 +10,7 @@ import operator
 
 import timeseries
 import operators
+from clement import clement_interpolate
 from utils import *
 
 
@@ -81,6 +82,13 @@ class Interpreter(object):
         ufl.tensors.ListTensor: lambda *x: np.hstack(x)
     }
     # FIXME: ListTensor(foo, indices=None) <= we have no support for indices
+
+    # Node to be handled by Clement interpolation
+    diff_type = (ufl.differentiation.Grad,
+                 ufl.differentiation.Div,
+                 ufl.differentiation.Curl,
+                 ufl.differentiation.NablaGrad,
+                 ufl.differentiation.NablaDiv)
     
     # Other's where Eval works
     terminal_type = (Function, int, float) 
@@ -135,6 +143,12 @@ class Interpreter(object):
         # Require reshaping and all args are functions
         if expr_type in Interpreter.reshape_type: 
             return numpy_reshaped(expr, op=Interpreter.reshape_type[expr_type])
+
+        # Clement
+        if expr_type in Interpreter.diff_type:
+            # NOTE: Clement is its own thing-it does not use this interpreter
+            # for subexpression evaluation
+            return clement_interpolate(expr)
 
         # Define tensor by componenents
         if isinstance(expr, Interpreter.compose_type):
