@@ -55,12 +55,14 @@ def clement_interpolate(expr):
          component = Function(V)
          A.mult(mean, component.vector()) 
          components.append(component)
-        
+         
     # Finalize the interpolant
     # Scalar has same space as component
     if len(shape) == 0: 
          uh = components.pop()
          uh.vector().apply('insert')
+         
+         return uh
 
     # We can precompute maps for assigning the components
     if len(shape) == 1:
