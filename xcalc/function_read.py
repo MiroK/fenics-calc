@@ -34,7 +34,7 @@ def data_reordering(V):
     # Vector
     if len(V.ufl_element().value_shape()) == 1:
         # Ellim Z for vectors in 2d
-        keep = [0, 1] if gdim == 2 else range(gdim)
+        keep = [0, 1] if gdim == 2 else list(range(gdim))
 
         reorder = lambda a, keep=keep, dof2f=dof2v:(
 
@@ -46,7 +46,7 @@ def data_reordering(V):
     # And tensor
     if len(V.ufl_element().value_shape()) == 2:
         # Ellim Z
-        keep = [0, 1, 3, 4] if gdim == 2 else range(gdim**2)
+        keep = [0, 1, 3, 4] if gdim == 2 else list(range(gdim**2))
             
         reorder = lambda a, keep=keep, dof2f=dof2v:(
             np.column_stack([row[dof2v] for row in (a[:, keep]).T]).flatten()
@@ -93,7 +93,7 @@ def read_vtu_point_data(vtu, nvertices, ncells):
     data = next(iter(point_data_elm))
 
     ncomps = int(data.attrib.get('NumberOfComponents', 0))
-    values = np.array(map(float, filter(bool, data.text.split(' '))))
+    values = np.array(list(map(float, list(filter(bool, data.text.split(' '))))))
     # Reshape for reorder (so it is same as H5File
     if ncomps:
         values = values.reshape((-1, ncomps))
@@ -150,12 +150,12 @@ def read_vtu_mesh(path, cell_type):
     point_data = next(iter(points))
     # Always 3d gdim with this file format
     gdim = cell_type.geometric_dimension()
-    point_data = np.array(map(float, filter(bool, point_data.text.split(' '))))
+    point_data = np.array(list(map(float, list(filter(bool, point_data.text.split(' '))))))
     point_data = point_data.reshape((-1, 3))[:, :gdim]
 
     # Parse cells
     cell_data = next(iter(cells))
-    cell_data = np.array(map(int, filter(bool, cell_data.text.split(' '))))
+    cell_data = np.array(list(map(int, list(filter(bool, cell_data.text.split(' '))))))
     cell_data = cell_data.reshape((-1, cell_type.num_vertices()))
 
     return make_mesh(point_data, cell_data, cell_type)

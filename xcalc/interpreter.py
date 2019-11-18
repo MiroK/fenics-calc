@@ -5,13 +5,13 @@ from dolfin import (Function, VectorFunctionSpace, interpolate, Expression,
                     as_vector, Constant, as_matrix)
 import numpy as np
 import ufl
-from itertools import imap, repeat, izip
+from itertools import repeat
 import operator
 
-import timeseries
-import operators
-from clement import clement_interpolate
-from utils import *
+from . import timeseries
+from . import operators
+from .clement import clement_interpolate
+from .utils import *
 
 
 def Eval(expr):
@@ -107,7 +107,7 @@ class Interpreter(object):
         # For series we eval each node and make a series of functions
         # NOTE: intersept here because TempSeries is a terminal type
         if isinstance(expr, timeseries.TempSeries):
-            return timeseries.TempSeries(zip(map(Interpreter.eval, expr), expr.times))
+            return timeseries.TempSeries(list(zip(list(map(Interpreter.eval, expr)), expr.times)))
 
         # Terminals/base cases (also TempSeries) -> identity
         if isinstance(expr, Interpreter.terminal_type): return expr
@@ -130,11 +130,11 @@ class Interpreter(object):
         # Okay: now we have expr with arguments. If this expression involves 
         # times series then all the non number arguments should be compatible 
         # time series
-        terminals = filter(lambda t: isinstance(t, Function), traverse_unique_terminals(expr))
+        terminals = [t for t in traverse_unique_terminals(expr) if isinstance(t, Function)]
         # Don't mix function and terminals
-        series = filter(lambda t: isinstance(t, timeseries.TempSeries), terminals)
+        series = [t for t in terminals if isinstance(t, timeseries.TempSeries)]
 
-        assert len(series) == len(terminals) or len(series) == 0, map(type, terminals)
+        assert len(series) == len(terminals) or len(series) == 0, list(map(type, terminals))
         # For series, we apply op to functions and make new series
         if series:
             return series_rule(expr)
@@ -161,9 +161,9 @@ class Interpreter(object):
         # No reshaping neeed
         op = Interpreter.no_reshape_type[expr_type]  # Throw if we don't support this
 
-        args = map(Interpreter.eval, expr.ufl_operands)
+        args = list(map(Interpreter.eval, expr.ufl_operands))
         # Manipulate coefs of arguments to get coefs of the expression
-        coefs = map(coefs_of, args)
+        coefs = list(map(coefs_of, args))
         V_coefs = op(*coefs)    
         # Make that function
         V = space_of(args)
@@ -173,7 +173,7 @@ class Interpreter(object):
 
 def numpy_reshaped(expr, op):
     '''Get the coefs by applying the numpy op to reshaped argument coefficients'''
-    args = map(Interpreter.eval, expr.ufl_operands)
+    args = list(map(Interpreter.eval, expr.ufl_operands))
 
     # Exception to the rules are some ops with scalar args
     if isinstance(expr, (ufl.tensoralgebra.Inner, ufl.tensoralgebra.Dot)):
@@ -206,7 +206,7 @@ def indexed_rule(expr):
 
 def series_rule(expr):
     '''Eval expression where the terminals are time series'''
-    foos = filter(lambda f: isinstance(f, Function), traverse_unique_terminals(expr))
+    foos = [f for f in traverse_unique_terminals(expr) if isinstance(f, Function)]
     # Make first sure that the series are compatible in the sense of having same time 
     # interval
     times = timeseries.common_interval(foos)
@@ -219,7 +219,7 @@ def series_rule(expr):
     # we grow the expr using nodes in the series
     def unpack(expr):
        '''expr -> iterable of expr'''
-       return (apply(type(expr), sum(args, ())) for args in expand(expr.ufl_operands))
+       return (type(expr)(*sum(args, ())) for args in expand(expr.ufl_operands))
 
     def expand(operands):
        iterators = []
@@ -233,11 +233,11 @@ def series_rule(expr):
           else:
              iterators.append(((f, ) for f in unpack(o)))
          
-       return izip(*iterators)
+       return zip(*iterators)
 
     nodes = unpack(expr)
     # A series of new nodes -> series of functions
-    return Interpreter.eval(timeseries.TempSeries(zip(nodes, times)))
+    return Interpreter.eval(timeseries.TempSeries(list(zip(nodes, times))))
 
 
 def component_tensor_rule(expr):

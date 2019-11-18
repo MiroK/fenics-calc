@@ -1,1 +1,1 @@
-from interpreter import Eval
+from .interpreter import Eval

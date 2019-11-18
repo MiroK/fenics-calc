@@ -46,7 +46,7 @@ def clement_interpolate(expr):
     A = _construct_averaging_operator(V, volumes)
         
     # L2 means of comps to indiv. cells
-    means = map(assemble, forms)
+    means = list(map(assemble, forms))
 
     # The interpolant (scalar, vector, tensor) is build from components
     components = []

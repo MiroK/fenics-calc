@@ -81,7 +81,7 @@ def nargs(f):
 if __name__ == '__main__':
     from dolfin import UnitSquareMesh, Expression, FunctionSpace, interpolate, File
     from dolfin import XDMFFile, inner, grad, dx, assemble
-    from interpreter import Eval
+    from .interpreter import Eval
     # Build a monomial basis for x, y, x**2, xy, y**2, ...
 
     deg = 4
@@ -116,5 +116,5 @@ if __name__ == '__main__':
 
     for fi in pod_basis:
         for fj in pod_basis:
-            print ip(fi, fj)
-        print
+            print(ip(fi, fj))
+        print()

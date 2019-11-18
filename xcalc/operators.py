@@ -1,10 +1,10 @@
 # Some pseudo nodes (function constructors) that could be useful
 from dolfin import Constant, interpolate, Function, as_backend_type
 from collections import deque
-from utils import numpy_op_foo, common_sub_element, make_space
+from .utils import numpy_op_foo, common_sub_element, make_space
 from ufl.corealg.traversal import traverse_unique_terminals
-import timeseries 
-import interpreter
+from . import timeseries 
+from . import interpreter
 import numpy as np
 
 
@@ -20,7 +20,7 @@ class LazyNode(Function):
     def space_for(expr, shape=None):
         '''Function space where expr should be represented'''
         # Don't want to call eval here as it beats the goal of being lazy
-        foos = filter(lambda f: isinstance(f, Function), traverse_unique_terminals(expr))
+        foos = [f for f in traverse_unique_terminals(expr) if isinstance(f, Function)]
         _, = set(f.function_space().mesh().id() for f in foos)
 
         elm = common_sub_element([f.function_space() for f in foos])
@@ -134,7 +134,7 @@ class Mean(LazyNode):
         # NOTE: for effiecency we stay away from Interpreter
         # Int
         dts = np.diff(series.times)
-        for dt, (f0, f1) in zip(dts, zip(series.nodes[:-1], series.nodes[1:])):
+        for dt, (f0, f1) in zip(dts, list(zip(series.nodes[:-1], series.nodes[1:]))):
             x.axpy(dt/2., f0.vector())  # (f0+f1)*dt/2
             x.axpy(dt/2., f1.vector())
         # Time interval scaling
@@ -160,7 +160,7 @@ class RMS(LazyNode):
         # Integrate
         dts = np.diff(series.times)
         f_vectors = [as_backend_type(f.vector()).vec() for f in series.nodes]
-        for dt, (f0, f1) in zip(dts, zip(f_vectors[:-1], f_vectors[1:])):
+        for dt, (f0, f1) in zip(dts, list(zip(f_vectors[:-1], f_vectors[1:]))):
             y.pointwiseMult(f0, f0)  # y = f0**2
             x.axpy(dt/2., y)  # (f0**2+f1**2)*dt/2
 
@@ -201,7 +201,7 @@ class STD(LazyNode):
         # Integrate
         dts = np.diff(series.times)
         f_vectors = [as_backend_type(f.vector()).vec() for f in series.nodes]
-        for dt, (f0, f1) in zip(dts, zip(f_vectors[:-1], f_vectors[1:])):
+        for dt, (f0, f1) in zip(dts, list(zip(f_vectors[:-1], f_vectors[1:]))):
             y.pointwiseMult(f0, f0)  # y = f0**2
             x.axpy(dt / 2., y)  # x += dt / 2 * y
 
@@ -236,7 +236,7 @@ def SlidingWindowFilter(Filter, width, series):
         # Once the deque is full it will 'overflow' from right so then
         # we have the right view to filter
         if len(f_buffer) == width:
-            ff = Filter(timeseries.TempSeries(zip(list(f_buffer), list(t_buffer))))
+            ff = Filter(timeseries.TempSeries(list(zip(list(f_buffer), list(t_buffer)))))
             tf = list(t_buffer)[width/2]  # Okay for odd
 
             filtered_ft_pairs.append((ff, tf))

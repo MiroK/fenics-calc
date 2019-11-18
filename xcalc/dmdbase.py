@@ -2,7 +2,7 @@
 # It is included here for the sake of simplifying the installation
 # on UiO machines
 
-from __future__ import division
+
 from os.path import splitext
 from builtins import range
 from builtins import object

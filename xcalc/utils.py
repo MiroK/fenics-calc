@@ -1,5 +1,5 @@
 from dolfin import Function, FunctionSpace, VectorElement, TensorElement
-from itertools import imap, izip, dropwhile, ifilterfalse, ifilter
+from itertools import dropwhile, filterfalse
 
 from ufl.indexed import Index, FixedIndex, MultiIndex
 from ufl.core.terminal import Terminal
@@ -28,7 +28,7 @@ def space_of(foos):
     '''Extract the function space for representing foos'''
     # We arrive here either with a function or a number
     elm, mesh = None, None
-    for f in filter(lambda x: isinstance(x, Function), foos):
+    for f in [x for x in foos if isinstance(x, Function)]:
         elm_ = f.function_space().ufl_element()
         mesh_ = f.function_space().mesh()
 
@@ -48,7 +48,7 @@ def numpy_op_indices(V):
     nsubs = V.num_sub_spaces()
     # Get will give us e.g matrix to go with det to set the value of det
     if nsubs:
-        indices = imap(list, izip(*[iter(V.sub(comp).dofmap().dofs()) for comp in range(nsubs)]))
+        indices = map(list, zip(*[iter(V.sub(comp).dofmap().dofs()) for comp in range(nsubs)]))
     else:
         indices = iter(V.dofmap().dofs())
 
@@ -134,19 +134,19 @@ def numpy_op_foo(args, op, shape_res):
 
         # Get values for op by reshaping
         if shape:
-            get = imap(lambda i, c=arg_coefs, s=shape: c[i].reshape(s), indices)
+            get = map(lambda i, c=arg_coefs, s=shape: c[i].reshape(s), indices)
         else:
-            get = imap(lambda i, c=arg_coefs: c[i], indices)
+            get = map(lambda i, c=arg_coefs: c[i], indices)
 
         get_args.append(get)
     # Now all the arguments can be iterated to gether by
-    args = izip(*get_args)
+    args = zip(*get_args)
 
     # Construct the result space
     V_res = make_space(sub_elm, shape_res, V.mesh())
     # How to reshape the result and assign
     if shape_representation(shape_res, V_res.ufl_element()):
-        dofs = imap(list, numpy_op_indices(V_res))
+        dofs = map(list, numpy_op_indices(V_res))
         reshape = lambda x: x.flatten()
     else:
         dofs = numpy_op_indices(V_res)
@@ -154,7 +154,7 @@ def numpy_op_foo(args, op, shape_res):
         
     # Fill coefs of the result expression
     coefs_res = Function(V_res).vector().get_local()
-    for dof, dof_args in izip(dofs, args):
+    for dof, dof_args in zip(dofs, args):
         coefs_res[dof] = reshape(op(*dof_args))
     # NOTE: make_function so that there is only one place (hopefully)
     # where parallelism needs to be addressed
@@ -164,7 +164,7 @@ def numpy_op_foo(args, op, shape_res):
 
 def find_first(things, predicate):
     '''Index of first item in container which satisfies the predicate'''
-    return next(dropwhile(lambda i, s=things: not predicate(s[i]), range(len(things))))
+    return next(dropwhile(lambda i, s=things: not predicate(s[i]), list(range(len(things)))))
 
 
 def find_last(things, predicate):
@@ -190,7 +190,7 @@ def traverse_indices(expr):
     '''Traverse the UFL expression (drilling into indices)'''
     if expr.ufl_operands:
         for op in expr.ufl_operands:
-            for e in ifilter(is_index, traverse_indices(op)):
+            for e in filter(is_index, traverse_indices(op)):
                 yield e
     # Multiindex has no operands but we want the indices
     if isinstance(expr, MultiIndex):

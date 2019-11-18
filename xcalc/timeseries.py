@@ -1,11 +1,11 @@
 import xml.etree.ElementTree as ET
-from function_read import (read_h5_function, read_vtu_function,
+from .function_read import (read_h5_function, read_vtu_function,
                            read_h5_mesh, read_vtu_mesh)
 from dolfin import (Function, XDMFFile, HDF5File, FunctionSpace,
                     VectorFunctionSpace, TensorFunctionSpace, warning)
 from ufl.corealg.traversal import traverse_unique_terminals
-from utils import space_of, clip_index
-import interpreter
+from .utils import space_of, clip_index
+from . import interpreter
 import numpy as np
 import itertools
 import os
@@ -50,7 +50,7 @@ class TempSeries(Function):
         if isinstance(index, int):
             return self.nodes[index]
         else:
-            return TempSeries(zip(self.nodes[index], self.times[index]))
+            return TempSeries(list(zip(self.nodes[index], self.times[index])))
 
         
 def stream(series, f):
@@ -70,12 +70,12 @@ def clip(series, t0, t1):
     nodes = series.nodes[index]
     times = series.times[index]
 
-    return TempSeries(zip(nodes, times))
+    return TempSeries(list(zip(nodes, times)))
 
         
 def common_interval(series):
     '''Series are compatible if they have same intervals'''
-    series = filter(lambda s: isinstance(s, TempSeries), series)
+    series = [s for s in series if isinstance(s, TempSeries)]
 
     interval = []
     for s in series:
@@ -97,8 +97,8 @@ def check_nodes(series):
     shape, = set(f.ufl_shape for f in series)
 
     terminal_functions = lambda s=series: (
-        itertools.ifilter(lambda f: isinstance(f, Function),
-                          itertools.chain(*map(traverse_unique_terminals, s)))
+        filter(lambda f: isinstance(f, Function),
+                          itertools.chain(*list(map(traverse_unique_terminals, s))))
     )
     # Base element                                                                                 
     family, = set(f.ufl_element().family() for f in terminal_functions())
@@ -161,7 +161,7 @@ def PVDTempSeries(path, V=None, first=0, last=None):
     V = get_P1_space(V)
 
     functions = read_vtu_function(vtus, V)
-    ft_pairs = zip(functions, times)
+    ft_pairs = list(zip(functions, times))
 
     return TempSeries(ft_pairs)
 
@@ -209,6 +209,6 @@ def XDMFTempSeries(path, V, first=0, last=None):
 
     functions = read_h5_function(h5_file, times, V)
     
-    ft_pairs = zip(functions, map(float, times))
+    ft_pairs = list(zip(functions, list(map(float, times))))
 
     return TempSeries(ft_pairs)

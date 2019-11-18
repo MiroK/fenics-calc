@@ -47,7 +47,7 @@ def dmd(functions, dmd_object, dt=1, modal_analysis=[]):
 if __name__ == '__main__':
     from dolfin import UnitSquareMesh, Expression, FunctionSpace, interpolate, File
     from dolfin import XDMFFile, inner, grad, dx, assemble
-    from interpreter import Eval
+    from .interpreter import Eval
     # Build a monomial basis for x, y, x**2, xy, y**2, ...
 
     try:
@@ -74,5 +74,5 @@ if __name__ == '__main__':
     dmd_ = DMD(svd_rank=-1, exact=False)
     energy, pod_basis = dmd(basis[1:], dmd_)
 
-    print np.linalg.norm(dmd_.snapshots - dmd_.reconstructed_data.real)
-    print len(pod_basis), len(basis[1:])
+    print(np.linalg.norm(dmd_.snapshots - dmd_.reconstructed_data.real))
+    print(len(pod_basis), len(basis[1:]))
