@@ -2,7 +2,7 @@ from xcalc.interpreter import Eval
 from dolfin import *
 import numpy as np
 import unittest
-
+import ufl
 
 def error(true, me):
     mesh = me.function_space().mesh()
@@ -309,7 +309,7 @@ class TestCases(unittest.TestCase):
         mesh = UnitSquareMesh(4, 4)
         x, y = SpatialCoordinate(mesh)
         
-        true = Min(x, y)
+        true = ufl.Min(x, y)
         me = Eval(true)
         
         e = error(true, me)
@@ -319,7 +319,7 @@ class TestCases(unittest.TestCase):
         mesh = UnitSquareMesh(4, 4)
         x, y = SpatialCoordinate(mesh)
         
-        true = Max(x+y, 2*y)
+        true = ufl.Max(x+y, 2*y)
         me = Eval(true)
         
         e = error(true, me)
@@ -355,7 +355,7 @@ class TestCases(unittest.TestCase):
         for n in (4, 8, 16, 32, 64):
             mesh = UnitSquareMesh(n, n)
             x, y = SpatialCoordinate(mesh)
-            true = conditional(And(x < y, Constant(0) < x), x+y, x-y)
+            true = conditional(ufl.And(x < y, Constant(0) < x), x+y, x-y)
         
             me = Eval(true)
             errors.append(error(true, me))
@@ -369,7 +369,7 @@ class TestCases(unittest.TestCase):
         x = interpolate(Constant(1), V)
         y = interpolate(Constant(2), V)
 
-        true = conditional(And(x < y, 0 < x), x+y, x-y)        
+        true = conditional(ufl.And(x < y, 0 < x), x+y, x-y)        
         me = Eval(true)
 
         e = error(true, me)

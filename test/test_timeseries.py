@@ -1,6 +1,6 @@
 from xcalc.interpreter import Eval
 from xcalc.timeseries import TempSeries, stream, clip
-from itertools import izip
+
 from dolfin import *
 import numpy as np
 import unittest
@@ -93,7 +93,7 @@ class TestCases(unittest.TestCase):
         stream_series = stream(2*series0, v)
         # NOTE: it is crucial that this is lazy. With normal zip
         # v in all the pairse has the last value
-        for vi, v in izip(series0, stream_series):
+        for vi, v in zip(series0, stream_series):
             self.assertTrue(error(2*vi, v) < 1E-14)
 
         for i, v in enumerate(stream_series):

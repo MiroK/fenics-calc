@@ -237,7 +237,7 @@ def SlidingWindowFilter(Filter, width, series):
         # we have the right view to filter
         if len(f_buffer) == width:
             ff = Filter(timeseries.TempSeries(list(zip(list(f_buffer), list(t_buffer)))))
-            tf = list(t_buffer)[width/2]  # Okay for odd
+            tf = list(t_buffer)[width//2]  # Okay for odd
 
             filtered_ft_pairs.append((ff, tf))
 

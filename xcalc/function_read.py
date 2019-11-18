@@ -178,7 +178,7 @@ def make_mesh(vertices, cells, cell_type):
 
     for vi, x in enumerate(vertices): editor.add_vertex(vi, x)
 
-    for ci, c in enumerate(cells): editor.add_cell(ci, *c)
+    for ci, c in enumerate(cells): editor.add_cell(ci, c)
     
     editor.close()
 
