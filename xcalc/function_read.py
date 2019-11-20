@@ -2,7 +2,7 @@
 # these ARE NOT GENERAL PURPOSE READEDERS
 
 
-from dolfin import Function, dof_to_vertex_map, Mesh, MeshEditor # ,warning
+from dolfin import Function, dof_to_vertex_map, Mesh, MeshEditor
 import xml.etree.ElementTree as ET
 from itertools import dropwhile
 from mpi4py import MPI
@@ -11,7 +11,7 @@ import numpy as np
 try:
     import h5py
 except ImportError:
-    warning('H5Py missing')
+    print('H5Py missing')
 
 
 assert MPI.COMM_WORLD.size == 1, 'No parallel (for your own good)'

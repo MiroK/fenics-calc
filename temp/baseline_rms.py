@@ -31,19 +31,19 @@ for what in ['velocity', 'pressure']:
 
         clipped_data_to_analyze = clip(data_to_analyze, first_dump, last_dump)
 
-        computed_mean = Mean(clipped_data_to_analyze)
+        computed_mean = Eval(Mean(clipped_data_to_analyze))
 
         out = File('%s/mean_rms/mean_%s.pvd' % (path_to_data, what))
         computed_mean.rename('f', '0')
         out << (computed_mean, 0.)
 
-        computed_rms = RMS(clipped_data_to_analyze)
+        computed_rms = Eval(RMS(clipped_data_to_analyze))
 
         out = File('%s/mean_rms/rms_%s.pvd' % (path_to_data, what))
         computed_rms.rename('f', '0')
         out << (computed_rms, 0.)
 
-        computed_std = STD(clipped_data_to_analyze)
+        computed_std = Eval(STD(clipped_data_to_analyze))
 
         out = File('%s/mean_rms/std_%s.pvd' % (path_to_data, what))
         computed_std.rename('f', '0')

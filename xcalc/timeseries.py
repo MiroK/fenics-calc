@@ -2,7 +2,7 @@ import xml.etree.ElementTree as ET
 from .function_read import (read_h5_function, read_vtu_function,
                            read_h5_mesh, read_vtu_mesh)
 from dolfin import (Function, XDMFFile, HDF5File, FunctionSpace,
-                    VectorFunctionSpace, TensorFunctionSpace) #, warning)
+                    VectorFunctionSpace, TensorFunctionSpace)
 from ufl.corealg.traversal import traverse_unique_terminals
 from .utils import space_of, clip_index
 from . import interpreter
@@ -152,7 +152,7 @@ def PVDTempSeries(path, V=None, first=0, last=None):
     # path.vtu -> function. But vertex values!!!!
     
     if not isinstance(V, FunctionSpace):
-        warning('Setting up P1 space on the recovered mesh')
+        print('Setting up P1 space on the recovered mesh')
 
         cell_type = V.cell()  # Dangerously assuming this is a UFL element
         mesh = read_vtu_mesh(vtus[0], cell_type)
@@ -199,7 +199,7 @@ def XDMFTempSeries(path, V, first=0, last=None):
     h5_file = os.path.join(os.path.dirname(os.path.abspath(path)), h5_file)
 
     if not isinstance(V, FunctionSpace):
-        warning('Setting up P1 space on the recovered mesh')
+        print('Setting up P1 space on the recovered mesh')
 
         cell_type = V.cell()  # Dangerously assuming this is a UFL element
         mesh = read_h5_mesh(h5_file, cell_type)
