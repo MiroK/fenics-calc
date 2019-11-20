@@ -10,7 +10,7 @@ print("Hi there!")
 #                      "/home/jrlab/Desktop/Git/article_ann_optimal_control_Nature/data_for_plots/Simu40000/angle0_10/results",
 #                      "/home/jrlab/Desktop/Git/article_ann_optimal_control_Nature/data_for_plots/Simu40000/base_line_10/results"]
 
-list_path_to_data = ["/home/fenics/shared/mesh_refinement/short_sim_res/tests/results"]
+list_path_to_data = ["results"]
 
 
 for what in ['velocity', 'pressure']:
