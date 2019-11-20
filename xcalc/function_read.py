@@ -2,7 +2,7 @@
 # these ARE NOT GENERAL PURPOSE READEDERS
 
 
-from dolfin import Function, dof_to_vertex_map, warning, Mesh, MeshEditor
+from dolfin import Function, dof_to_vertex_map, Mesh, MeshEditor # ,warning
 import xml.etree.ElementTree as ET
 from itertools import dropwhile
 from mpi4py import MPI

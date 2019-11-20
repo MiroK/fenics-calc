@@ -2,7 +2,7 @@ import xml.etree.ElementTree as ET
 from .function_read import (read_h5_function, read_vtu_function,
                            read_h5_mesh, read_vtu_mesh)
 from dolfin import (Function, XDMFFile, HDF5File, FunctionSpace,
-                    VectorFunctionSpace, TensorFunctionSpace, warning)
+                    VectorFunctionSpace, TensorFunctionSpace) #, warning)
 from ufl.corealg.traversal import traverse_unique_terminals
 from .utils import space_of, clip_index
 from . import interpreter
