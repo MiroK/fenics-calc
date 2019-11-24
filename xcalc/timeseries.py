@@ -127,6 +127,18 @@ def get_P1_space(V):
     return TensorFunctionSpace(mesh, 'CG', 1)
 
 
+def pvtu_pieces(path):
+    '''Get VTUs from PVD -> PVTU -> VTU'''
+    _, ext = os.path.splitext(path)
+
+    tree = ET.parse(path)
+    collection = list(tree.getroot())[0]
+    path = os.path.dirname(os.path.abspath(path))
+
+    return tuple(os.path.join(path, item.attrib['Source'])
+                 for item in collection if 'Source' in item.attrib)
+
+
 def PVDTempSeries(path, V=None, first=0, last=None):
     '''
     Read in the temp series of functions in V from PVD file. If V is not 
@@ -144,13 +156,24 @@ def PVDTempSeries(path, V=None, first=0, last=None):
     vtus, times = [], []
     for dataset in collection:
         assert dataset.attrib['part'] == '0'
-        
-        vtus.append(os.path.join(path, dataset.attrib['file']))
+
+        piece = dataset.attrib['file']
+        _, ext = os.path.splitext(piece)
+        # Serial
+        if ext == '.vtu':
+            vtus.append((os.path.join(path, piece), ))
+        # Parallel get pieces
+        else:
+            # So we have a pvtu file which holds as piece_source vtu files
+            assert ext == '.pvtu'
+            vtus.append(pvtu_pieces(os.path.join(path, dataset.attrib['file'])))
+            
         times.append(float(dataset.attrib['timestep']))
     
     vtus, times = vtus[slice(first, last, None)], times[slice(first, last, None)]
     # path.vtu -> function. But vertex values!!!!
-    
+
+    mesh = None
     if not isinstance(V, FunctionSpace):
         print('Setting up P1 space on the recovered mesh')
 
@@ -160,7 +183,7 @@ def PVDTempSeries(path, V=None, first=0, last=None):
         V = FunctionSpace(mesh, V)
     V = get_P1_space(V)
 
-    functions = read_vtu_function(vtus, V)
+    functions = read_vtu_function(vtus, V, mesh)
     ft_pairs = list(zip(functions, times))
 
     return TempSeries(ft_pairs)

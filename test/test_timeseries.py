@@ -1,5 +1,6 @@
 from xcalc.interpreter import Eval
-from xcalc.timeseries import TempSeries, stream, clip
+from xcalc.timeseries import TempSeries, stream, clip, PVDTempSeries
+import subprocess, time
 
 from dolfin import *
 import numpy as np
@@ -13,6 +14,17 @@ def error(true, me):
 
 class TestCases(unittest.TestCase):
     '''UnitTest for (some of) xcalc.timeseries'''
+    @classmethod
+    def setUpClass(cls):
+        'called once, before any tests'
+        subprocess.call(['mpirun -np 4 python3 setup_ppvtu.py'], shell=True, cwd='./test')
+        time.sleep(3)
+
+    @classmethod
+    def tearDownClass(cls):
+        subprocess.call(['rm scalar* vector*'], shell=True, cwd='./test')
+        time.sleep(3)
+    
     def test_fail_on_times(self):
         mesh = UnitSquareMesh(2, 2)
         V = FunctionSpace(mesh, 'DG', 0)
@@ -148,5 +160,28 @@ class TestCases(unittest.TestCase):
             self.assertTrue(error(true, f) < 1E-14)
 
         
+    def test_pvtu_scalar(self):
+        f = PVDTempSeries('./test/scalar.pvd', FiniteElement('Lagrange', triangle, 1))
 
+        V = f.function_space()
+        g = Expression('t*(x[0]+x[1])', degree=1, t=1)
+        f0 = interpolate(g, V)
 
+        for t, fi in enumerate(f, 1):
+            g.t = t
+            f0.assign(interpolate(g, V))
+
+            self.assertTrue((fi.vector()-f0.vector()).norm('linf') < 1E-14)
+            
+    def test_pvtu_vector(self):
+        f = PVDTempSeries('./test/vector.pvd', VectorElement('Lagrange', triangle, 1))
+
+        V = f.function_space()
+        g = Expression(('t*(x[0]+x[1])', 't'), degree=1, t=1)
+        f0 = interpolate(g, V)
+
+        for t, fi in enumerate(f, 1):
+            g.t = t
+            f0.assign(interpolate(g, V))
+
+            self.assertTrue((fi.vector()-f0.vector()).norm('linf') < 1E-14)

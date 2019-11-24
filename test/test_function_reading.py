@@ -1,5 +1,5 @@
 from xcalc.timeseries import XDMFTempSeries, PVDTempSeries
-from xcalc.function_read import read_vtu_mesh, read_h5_mesh
+from xcalc.function_read import read_vtu_mesh, read_h5_mesh, union_mesh
 from dolfin import *
 import numpy as np
 import unittest
@@ -206,6 +206,31 @@ class TestCases(unittest.TestCase):
         self.assertTrue(error(f1, series.getitem(1)) < 1E-14)
 
 
+    def test_mesh_union(self):
+        dx, dy = 0.5, 0.5
 
+        meshes = []
+        for j in range(3):
+            for i in range(3):
+                x0, y0 = dx*i, dy*j
+                x1, y1 = x0 + dx, y0 + dy
+                meshes.append(RectangleMesh(Point(x0, y0), Point(x1, y1), 4, 4))
+                
+        union = union_mesh(meshes)
+        self.assertTrue(union.num_cells() == sum(m.num_cells() for m in meshes))
 
+        o1 = np.linspace(0, 1.5, 13)
+        self.assertTrue(np.linalg.norm(np.sort(np.unique(union.coordinates()[:, 0])) - o1) < 1E-13)
+        self.assertTrue(np.linalg.norm(np.sort(np.unique(union.coordinates()[:, 1])) - o1) < 1E-13)
 
+        # Check mapping
+        y = union.coordinates()
+        for mesh in meshes:
+            found = False
+            for m_id, m_map in union.leafs:
+                found = m_id == mesh.id()
+                if found: break
+            self.assertTrue(found)
+                
+            x = mesh.coordinates()
+            self.assertTrue(np.linalg.norm(x - y[m_map]) < 1E-13)
